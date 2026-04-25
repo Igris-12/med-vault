@@ -93,7 +93,7 @@ function DoctorCard({ doc }: { doc: Doctor }) {
             <p className="font-sans font-semibold text-sm text-text-primary">{doc.name}</p>
             {urgency && <span className="text-xs px-1.5 py-0.5 rounded-full bg-coral/15 text-coral font-body">Recommended</span>}
           </div>
-          <p className="font-body text-xs text-text-muted">{doc.specialty} · {doc.experienceYears}y exp</p>
+          <p className="font-body text-xs text-text-muted">{doc.specialty} &middot; {doc.experienceYears}y exp</p>
           <p className="font-body text-xs text-text-faint">{doc.qualification}</p>
           <div className="flex items-center gap-3 mt-1.5">
             <span className="font-mono text-xs text-amber">★ {doc.rating} <span className="text-text-faint">({doc.reviewCount})</span></span>
@@ -104,7 +104,7 @@ function DoctorCard({ doc }: { doc: Doctor }) {
       </div>
       <div className="mt-2 flex items-center justify-between">
         <span className="font-mono text-xs text-text-faint">{doc.source}</span>
-        <span className="font-body text-xs text-text-faint">{doc.languages.join(' · ')}</span>
+        <span className="font-body text-xs text-text-faint">{doc.languages.join(', ')}</span>
       </div>
     </div>
   );
@@ -177,7 +177,7 @@ function PlacePopup({ place, onRoute, onClose, isVisited }: {
               : doctors.map((d) => <DoctorCard key={d.id} doc={d} />)
             }
             <p className="text-xs text-text-faint font-mono text-center py-2 border-t border-border-dim">
-              Sources: {[...new Set(doctors.map(d => d.source))].join(' · ')}
+              Sources: {[...new Set(doctors.map(d => d.source))].join(', ')}
             </p>
           </div>
         )}
