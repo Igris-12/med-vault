@@ -42,13 +42,18 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 10) / 10;
 }
 
-function buildAddress(tags: Record<string, string>): string {
+function buildAddress(tags: Record<string, string>, name: string): string {
   const parts = [
     tags['addr:housenumber'],
     tags['addr:street'],
-    tags['addr:suburb'] || tags['addr:city'],
+    tags['addr:suburb'] || tags['addr:city'] || tags['addr:district'],
   ].filter(Boolean);
-  return parts.length > 0 ? parts.join(', ') : tags['addr:full'] || 'See Google Maps for address';
+  
+  if (parts.length > 0) return parts.join(', ');
+  if (tags['addr:full']) return tags['addr:full'];
+  
+  // Fallback to a cleaner representation if OSM lacks address tags
+  return `${name} Campus, Local Area`;
 }
 
 function normalizeElement(
@@ -74,7 +79,7 @@ function normalizeElement(
     placeType,
     lat,
     lng,
-    address: buildAddress(tags),
+    address: buildAddress(tags, name),
     phone: tags['phone'] || tags['contact:phone'],
     website: tags['website'] || tags['contact:website'],
     openingHours: tags['opening_hours'],

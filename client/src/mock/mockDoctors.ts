@@ -50,5 +50,30 @@ export const MOCK_DOCTORS: Doctor[] = [
 
 /** Get doctors for a given hospitalId (from mock or OSM-sourced place) */
 export function getDoctorsForHospital(hospitalId: string): Doctor[] {
-  return MOCK_DOCTORS.filter((d) => d.hospitalId === hospitalId);
+  // If it's a hardcoded mock ID, return exactly those
+  const exactMatches = MOCK_DOCTORS.filter((d) => d.hospitalId === hospitalId);
+  if (exactMatches.length > 0) return exactMatches;
+
+  // Otherwise, for real OSM data (e.g., node-123456), generate a deterministic list of doctors
+  // by using the hospitalId string to pick 2-5 random doctors from the mock list.
+  let hash = 0;
+  for (let i = 0; i < hospitalId.length; i++) {
+    hash = hospitalId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  const count = (Math.abs(hash) % 4) + 2; // 2 to 5 doctors
+  const doctors: Doctor[] = [];
+  
+  for (let i = 0; i < count; i++) {
+    const docIndex = Math.abs(hash + i * 13) % MOCK_DOCTORS.length;
+    const baseDoc = MOCK_DOCTORS[docIndex];
+    // Create a clone with this hospitalId
+    doctors.push({
+      ...baseDoc,
+      id: `${hospitalId}-doc-${i}`,
+      hospitalId,
+    });
+  }
+  
+  return doctors;
 }
