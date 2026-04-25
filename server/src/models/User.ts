@@ -1,4 +1,16 @@
-import mongoose, { Schema, Types } from 'mongoose';
+import mongoose, { Schema } from 'mongoose';
+
+export interface INotificationPrefs {
+  delivered: boolean;
+  failed: boolean;
+  upcoming: boolean;
+  marketing: boolean;
+}
+
+export interface IUiPrefs {
+  themeId: string;
+  mode: 'patient' | 'doctor';
+}
 
 export interface IUser {
   _id: string;  // Firebase UID stored as string
@@ -12,6 +24,8 @@ export interface IUser {
   emergencyToken: string;
   modePreference: 'patient' | 'doctor';
   whatsappPhone?: string;
+  notificationPrefs: INotificationPrefs;
+  uiPrefs: IUiPrefs;
   createdAt: Date;
 }
 
@@ -34,6 +48,16 @@ const UserSchema = new Schema<IUser>(
     emergencyToken: { type: String, required: true, unique: true },
     modePreference: { type: String, enum: ['patient', 'doctor'], default: 'patient' },
     whatsappPhone: { type: String, sparse: true, index: true },
+    notificationPrefs: {
+      delivered: { type: Boolean, default: true },
+      failed: { type: Boolean, default: true },
+      upcoming: { type: Boolean, default: true },
+      marketing: { type: Boolean, default: false },
+    },
+    uiPrefs: {
+      themeId: { type: String, default: 'dark-teal' },
+      mode: { type: String, enum: ['patient', 'doctor'], default: 'patient' },
+    },
   },
   { timestamps: true }
 );

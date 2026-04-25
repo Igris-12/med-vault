@@ -342,3 +342,63 @@ export async function generateContextualContent(
     return response.trim();
   });
 }
+
+// ─── Multilingual audio transcription (Gemini 2.5 Flash) ─────────────────────
+// Handles any language. Used for WhatsApp voice messages (OGG, MP3, WAV, etc.)
+export async function transcribeAudio(
+  audioBuffer: Buffer,
+  mimeType: string,
+  languageHint?: string
+): Promise<{ transcription: string; detectedLanguage: string }> {
+  return withRetry(async () => {
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const base64 = audioBuffer.toString('base64');
+
+    const langInstruction = languageHint
+      ? `The user's preferred language is ${languageHint}. `
+      : '';
+
+    const prompt = `${langInstruction}Transcribe this audio message accurately. The audio may be in any language.
+Return a JSON object with:
+- "transcription": the full text transcription in the original language
+- "transcription_english": English translation (if not already English, else same as transcription)
+- "detected_language": the language name in English (e.g. "Hindi", "English", "Tamil", "Marathi")
+
+Return ONLY valid JSON, no markdown, no preamble.`;
+
+    const result = await model.generateContent([
+      prompt,
+      { inlineData: { mimeType, data: base64 } },
+    ]);
+
+    const text = result.response.text().trim();
+    try {
+      const parsed = JSON.parse(text);
+      return {
+        transcription: parsed.transcription || text,
+        detectedLanguage: parsed.detected_language || 'Unknown',
+      };
+    } catch {
+      // If JSON parse fails, return raw text as transcription
+      return { transcription: text, detectedLanguage: 'Unknown' };
+    }
+  });
+}
+
+// ─── processAudio — alias used by whatsappController audio handler ────────────
+// Sends audio buffer + custom prompt to Gemini 2.5 Flash Native Audio Dialog
+// Returns raw text (caller handles JSON parsing if needed)
+export async function processAudio(
+  buffer: Buffer,
+  mimeType: string,
+  prompt: string
+): Promise<string> {
+  return withRetry(async () => {
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const result = await model.generateContent([
+      prompt,
+      { inlineData: { mimeType, data: buffer.toString('base64') } },
+    ]);
+    return result.response.text().trim();
+  });
+}

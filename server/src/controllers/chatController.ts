@@ -84,3 +84,41 @@ export const getSession = async (req: Request, res: Response): Promise<void> => 
   }
   res.json({ success: true, data: session });
 };
+
+export const uploadChatMedia = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ success: false, error: 'No file provided' });
+      return;
+    }
+
+    // Upload to Cloudinary
+    const { uploadBufferToCloudinary } = await import('../services/cloudinaryService.js');
+    const fs = (await import('fs')).default;
+    const buffer = await fs.promises.readFile(file.path);
+    const cloudResult = await uploadBufferToCloudinary(
+      buffer,
+      file.mimetype,
+      'medvault/chat',
+      `chat_${req.user!.uid}`
+    );
+    // Remove local temp file
+    fs.unlink(file.path, () => {});
+
+    res.json({
+      success: true,
+      data: {
+        url: cloudResult.url,
+        publicId: cloudResult.publicId,
+        filename: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size,
+      },
+    });
+  } catch (err) {
+    console.error('uploadChatMedia error:', err);
+    res.status(500).json({ success: false, error: 'Upload failed' });
+  }
+};
+

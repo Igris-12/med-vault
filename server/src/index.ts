@@ -18,6 +18,9 @@ import chatRoutes from './routes/chat.js';
 import emergencyRoutes from './routes/emergency.js';
 import usersRoutes from './routes/users.js';
 import whatsappRoutes from './routes/whatsapp.js';
+import supportRoutes from './routes/support.js';
+import { startAllCronJobs } from './services/reminderCronService.js';
+import aiGraphRoutes from './routes/aiGraph.js';
 
 dotenv.config();
 
@@ -64,6 +67,7 @@ app.use(morgan('dev'));
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use('/uploads/chat', express.static(path.join(process.cwd(), 'uploads', 'chat')));
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {
@@ -90,6 +94,8 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/support', supportRoutes);
+app.use('/api/ai/graph', aiGraphRoutes);
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
 app.use((_req, res) => {
@@ -122,6 +128,8 @@ const start = async () => {
   server.listen(PORT, () => {
     console.log(`\n🚀 MedVault server running on http://localhost:${PORT}`);
     console.log(`📡 Health check: http://localhost:${PORT}/api/health\n`);
+    // Start scheduled WhatsApp reminders
+    startAllCronJobs();
   });
 };
 
