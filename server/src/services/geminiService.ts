@@ -1,6 +1,68 @@
 import { flashModel, genAI } from '../config/gemini.js';
 import { Medication, LabValue } from '../types/api.js';
 
+// ─── Prescription BBox Extraction Types ───────────────────────────────────────
+export interface FieldExtraction {
+  value: string | null;
+  bounding_box: [number, number, number, number]; // [ymin, xmin, ymax, xmax] 0–1
+  confidence_score: number; // 1–100
+  confidence_reason: string;
+}
+
+export interface MedicationExtraction {
+  medication_name: FieldExtraction;
+  dosage: FieldExtraction;
+  frequency: FieldExtraction;
+  duration: FieldExtraction;
+  instructions: FieldExtraction;
+}
+
+export interface PrescriptionExtraction {
+  patient_name: FieldExtraction;
+  doctor_name: FieldExtraction;
+  date: FieldExtraction;
+  medications: MedicationExtraction[];
+  diagnosis: FieldExtraction;
+  overall_legibility: number;
+}
+
+// ─── Prescription BBox Prompt ────────────────────────────────────────────────
+const PRESCRIPTION_BBOX_PROMPT = `
+You are a medical document extraction AI. You will be given an image of a handwritten doctor's prescription.
+
+Your job is to extract all medical information and return it as a single valid JSON object. No explanation, no markdown, no backticks — pure JSON only.
+
+For EVERY field you extract, you must also return:
+1. A bounding_box as [ymin, xmin, ymax, xmax] in normalized coordinates (0.0 to 1.0), representing where on the image you found this text.
+2. A confidence_score from 1 to 100 based purely on how legible the handwriting is for that specific field.
+3. A confidence_reason: a single short phrase explaining the score (e.g. "clearly printed", "cursive, ambiguous letter", "partially obscured by ink smudge").
+
+Return this exact JSON structure:
+
+{
+  "patient_name": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+  "doctor_name": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+  "date": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+  "medications": [
+    {
+      "medication_name": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+      "dosage": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+      "frequency": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+      "duration": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+      "instructions": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" }
+    }
+  ],
+  "diagnosis": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+  "overall_legibility": 0
+}
+
+Rules:
+- If a field is not present in the prescription, set value to null and confidence_score to 0.
+- Bounding boxes must tightly wrap only the handwritten text for that field, not the entire document.
+- overall_legibility is the average confidence across all extracted fields, rounded to the nearest integer.
+- Never hallucinate drug names. If you cannot read a medication name with at least 40% confidence, set value to "ILLEGIBLE" and confidence_score to the actual score.
+`.trim();
+
 // ─── Extraction Prompt ────────────────────────────────────────────────────────
 const EXTRACTION_PROMPT = `
 You are a medical document analysis AI. Extract all medical information from the provided document.
@@ -182,6 +244,44 @@ export async function* streamChatResponse(
   }
 }
 
+// ─── Prescription BBox Extractor ──────────────────────────────────────────────
+// Used exclusively for handwritten prescription images.
+// Returns per-field bounding boxes + confidence scores for the PrescriptionViewer UI.
+export async function extractPrescriptionWithBBoxes(
+  buffer: Buffer,
+  mimeType: string
+): Promise<PrescriptionExtraction | null> {
+  const base64 = buffer.toString('base64');
+
+  return withRetry(async () => {
+    // Use a fresh model instance with low temperature to reduce hallucinations
+    const prescriptionModel = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.1,
+      },
+    });
+
+    const result = await prescriptionModel.generateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: PRESCRIPTION_BBOX_PROMPT },
+            { inlineData: { mimeType, data: base64 } },
+          ],
+        },
+      ],
+    });
+
+    const text = result.response.text();
+    try {
+      return JSON.parse(text) as PrescriptionExtraction;
+    } catch {
+      console.error('Prescription bbox JSON parse failed:', text.slice(0, 200));
+      return null;
+    }
 // ─── Non-streaming response (for WhatsApp — cannot stream) ───────────────────
 export async function generateContent(prompt: string): Promise<string> {
   return withRetry(async () => {

@@ -36,6 +36,10 @@
     "mongoose": "^9.5.0",
     "morgan": "^1.10.1",
     "multer": "^2.1.1",
+    "pdfkit": "^0.18.0",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.3",
+    "uuid": "^14.0.0"
     "multer-storage-cloudinary": "^4.0.0",
     "pdfkit": "^0.18.0",
     "qrcode": "^1.5.4",

@@ -24,6 +24,15 @@ const app = express();
 const server = http.createServer(app);
 
 // ─── Socket.io ───────────────────────────────────────────────────────────────
+// Accept any localhost port in dev, or the explicit CLIENT_URL in prod
+const corsOrigin = (origin: string | undefined, cb: (err: Error | null, ok?: boolean) => void) => {
+  if (!origin || origin.startsWith('http://localhost') || origin === process.env.CLIENT_URL) {
+    cb(null, true);
+  } else {
+    cb(new Error(`CORS blocked: ${origin}`));
+  }
+};
+
 export const io = new SocketIOServer(server, {
   cors: {
     origin: true, // Allow any origin for local dev ports

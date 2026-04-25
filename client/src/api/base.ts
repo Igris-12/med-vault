@@ -9,13 +9,21 @@
 import { useState, useEffect, useCallback } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const IS_DEV = import.meta.env.DEV;
+const DEV_BYPASS_TOKEN = 'dev-bypass-token';
 
 // ─── Auth token helper (supports dev-bypass mode) ────────────────────────────
 export function getAuthToken(): string {
   // In mock mode, return the dev bypass token — no Firebase needed
-  if (import.meta.env.VITE_USE_MOCK === 'true') return 'dev-bypass-token';
-  // In real mode, return the Firebase token from localStorage
-  return localStorage.getItem('firebase_token') || '';
+  if (import.meta.env.VITE_USE_MOCK === 'true') return DEV_BYPASS_TOKEN;
+
+  // In real mode, prefer a Firebase token but fall back to the existing
+  // development bypass path so protected routes still work in local dev.
+  const firebaseToken = localStorage.getItem('firebase_token');
+  if (firebaseToken) return firebaseToken;
+  if (IS_DEV) return DEV_BYPASS_TOKEN;
+
+  return '';
 }
 
 // ─── Base fetch with auth header ─────────────────────────────────────────────

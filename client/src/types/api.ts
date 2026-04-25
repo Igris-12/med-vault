@@ -39,6 +39,40 @@ export interface LabValue {
   is_abnormal: boolean;
 }
 
+// ─── Prescription BBox Extraction (Viewer) ────────────────────────────────────
+export interface FieldExtraction {
+  value: string | null;
+  bounding_box: [number, number, number, number]; // [ymin, xmin, ymax, xmax] 0–1
+  confidence_score: number; // 1–100
+  confidence_reason: string;
+}
+
+export interface MedicationExtraction {
+  medication_name: FieldExtraction;
+  dosage: FieldExtraction;
+  frequency: FieldExtraction;
+  duration: FieldExtraction;
+  instructions: FieldExtraction;
+}
+
+export interface PrescriptionExtraction {
+  patient_name: FieldExtraction;
+  doctor_name: FieldExtraction;
+  date: FieldExtraction;
+  medications: MedicationExtraction[];
+  diagnosis: FieldExtraction;
+  overall_legibility: number;
+  manualCorrections?: Record<string, string>;
+  confirmedAt?: string;
+}
+
+export interface PrescriptionExtractionResponse {
+  extraction: PrescriptionExtraction;
+  imageUrl: string;
+  filename: string;
+  status: DocumentStatus;
+}
+
 // ─── Document ────────────────────────────────────────────────────────────────
 export interface MedDocument {
   _id: string;

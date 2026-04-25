@@ -29,6 +29,7 @@ export interface IDocument extends MongoDoc {
   tags: string[];
   embedding: number[];
   rawGeminiResponse?: string;
+  prescriptionExtraction?: Record<string, unknown>; // stores PrescriptionExtraction JSON
 }
 
 const DocumentSchema = new Schema<IDocument>(
@@ -70,6 +71,7 @@ const DocumentSchema = new Schema<IDocument>(
     tags: [{ type: String }],
     embedding: [{ type: Number }],
     rawGeminiResponse: { type: String },
+    prescriptionExtraction: { type: Schema.Types.Mixed },
   },
   { timestamps: true }
 );
