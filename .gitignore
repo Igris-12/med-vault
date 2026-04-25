@@ -1,0 +1,21 @@
+# Root gitignore
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+
+# Editor
+.vscode/
+.idea/
+
+# Env files (everywhere)
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+
+# Uploads (user medical data — never commit)
+server/uploads/
