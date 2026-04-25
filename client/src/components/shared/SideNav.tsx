@@ -7,6 +7,7 @@ const navItems = [
   { to: '/app/records', icon: '📁', label: 'Records' },
   { to: '/app/prescriptions', icon: '💊', label: 'Prescriptions' },
   { to: '/app/alerts', icon: '🔔', label: 'Alerts' },
+  { to: '/app/locator', icon: '📍', label: 'Find Hospital' },
   { to: '/app/chat', icon: '💬', label: 'AI Chat' },
   { to: '/app/upload', icon: '⬆️', label: 'Upload' },
   { to: '/app/emergency', icon: '🆘', label: 'Emergency' },

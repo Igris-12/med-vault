@@ -97,3 +97,17 @@
   .glow-teal { box-shadow: 0 0 24px rgba(0, 229, 195, 0.15); }
   .glow-coral { box-shadow: 0 0 24px rgba(255, 74, 110, 0.15); }
 }
+
+/* ── Maplibre popup reset ─────────────────────────────────────────────── */
+.mv-popup .maplibregl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 12px;
+}
+.mv-popup .maplibregl-popup-tip {
+  display: none !important;
+}
+.mv-popup .maplibregl-popup-close-button {
+  display: none !important;
+}
