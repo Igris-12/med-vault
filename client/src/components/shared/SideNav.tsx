@@ -6,6 +6,7 @@ const navItems = [
   { to: '/app/timeline', icon: '📈', label: 'Timeline' },
   { to: '/app/records', icon: '📁', label: 'Records' },
   { to: '/app/prescriptions', icon: '💊', label: 'Prescriptions' },
+  { to: '/app/alerts', icon: '🔔', label: 'Alerts' },
   { to: '/app/chat', icon: '💬', label: 'AI Chat' },
   { to: '/app/upload', icon: '⬆️', label: 'Upload' },
   { to: '/app/emergency', icon: '🆘', label: 'Emergency' },

@@ -8,6 +8,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Timeline = lazy(() => import('./pages/Timeline'));
 const Records = lazy(() => import('./pages/Records'));
 const Prescriptions = lazy(() => import('./pages/Prescriptions'));
+const Alerts = lazy(() => import('./pages/Alerts'));
 const Chat = lazy(() => import('./pages/Chat'));
 const Upload = lazy(() => import('./pages/Upload'));
 const Emergency = lazy(() => import('./pages/Emergency'));
@@ -48,6 +49,7 @@ export default function App() {
                   <Route path="timeline" element={<Timeline />} />
                   <Route path="records" element={<Records />} />
                   <Route path="prescriptions" element={<Prescriptions />} />
+                  <Route path="alerts" element={<Alerts />} />
                   <Route path="chat" element={<Chat />} />
                   <Route path="upload" element={<Upload />} />
                   <Route path="emergency" element={<Emergency />} />

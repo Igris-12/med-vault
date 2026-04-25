@@ -1,8 +1,19 @@
 import { apiFetch, useApiData } from './base';
 import {
-  USE_MOCK_DATA, MOCK_DOCUMENTS, MOCK_TIMELINE, MOCK_ANOMALIES, MOCK_DASHBOARD_SUMMARY
+  USE_MOCK_DATA, MOCK_DOCUMENTS, MOCK_TIMELINE, MOCK_ANOMALIES, MOCK_DASHBOARD_SUMMARY, MOCK_ALERTS
 } from '../mock';
-import type { MedDocument, TimelineMonth, Anomaly, DashboardSummary } from '../types/api';
+import type { MedDocument, TimelineMonth, Anomaly, DashboardSummary, HealthAlert } from '../types/api';
+
+// ─── Alerts ────────────────────────────────────────────────────────────────
+export function useAlerts() {
+  return useApiData<HealthAlert[]>(
+    () => USE_MOCK_DATA
+      ? Promise.resolve(MOCK_ALERTS)
+      : apiFetch('/api/records/alerts'),
+    [USE_MOCK_DATA]
+  );
+}
+
 
 // ─── Dashboard Summary ─────────────────────────────────────────────────────
 export function useDashboardSummary() {
