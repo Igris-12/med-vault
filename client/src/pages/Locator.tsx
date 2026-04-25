@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import Map, { Marker, Popup, NavigationControl } from 'react-map-gl/maplibre';
+import Map, { Marker, Popup, NavigationControl, Source, Layer } from 'react-map-gl/maplibre';
+import type { LineLayer, FillLayer } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { fetchNearbyPlaces, type NearbyPlace, type PlaceType } from '../services/overpassService';
+import { getRoute, formatDistance, formatDuration, createRadiusCircle } from '../services/routeService';
 
 const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
@@ -54,11 +56,12 @@ function UserMarker({ lat, lng }: { lat: number; lng: number }) {
 
 // ─── Popup ────────────────────────────────────────────────────────────────────
 
-function PlacePopup({ place, userLat, userLng, onClose }: {
-  place: NearbyPlace; userLat: number; userLng: number; onClose: () => void;
+function PlacePopup({ place, onRoute, onClose }: {
+  place: NearbyPlace;
+  onRoute: () => void;
+  onClose: () => void;
 }) {
   const meta = PLACE_META[place.placeType];
-  const dir = `https://www.google.com/maps/dir/${userLat},${userLng}/${place.lat},${place.lng}`;
   return (
     <Popup latitude={place.lat} longitude={place.lng} anchor="bottom" offset={46}
       onClose={onClose} closeButton={false} className="mv-popup" maxWidth="300px">
@@ -82,9 +85,9 @@ function PlacePopup({ place, userLat, userLng, onClose }: {
           {place.emergencyAvailable && <span className="badge-coral">🚨 24h Emergency</span>}
         </div>
         <div className="flex gap-2">
-          <a href={dir} target="_blank" rel="noreferrer" className="btn-primary flex-1 text-center text-xs py-2">
+          <button onClick={onRoute} className="btn-primary flex-1 text-xs py-2">
             🗺️ Get Directions
-          </a>
+          </button>
           {place.phone && <a href={`tel:${place.phone}`} className="btn-ghost px-3 text-xs py-2">📞</a>}
         </div>
       </div>
@@ -215,6 +218,11 @@ export default function Locator() {
   const [activeTypes, setActiveTypes] = useState<Set<PlaceType>>(new Set());
   const [emergencyOnly, setEmergencyOnly] = useState(false);
 
+  // Routing state
+  const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.LineString | null>(null);
+  const [routeInfo, setRouteInfo] = useState<{ distance: string; duration: string } | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+
   const mapRef = useRef<any>(null);
 
   const doFetch = useCallback(async (lat: number, lng: number, r: number) => {
@@ -261,6 +269,30 @@ export default function Locator() {
       mapRef.current.flyTo({ center: [userLng, userLat], zoom: 14, duration: 1000 });
     }
   }, [appState, userLat, userLng]);
+
+  // Route handler — OSRM, drawn on map
+  const handleRoute = useCallback(async (place: NearbyPlace, uLat: number, uLng: number) => {
+    setRouteLoading(true);
+    setRouteGeoJSON(null);
+    setRouteInfo(null);
+    try {
+      const result = await getRoute(uLng, uLat, place.lng, place.lat);
+      setRouteGeoJSON(result.geometry);
+      setRouteInfo({ distance: formatDistance(result.distanceMeters), duration: formatDuration(result.durationSeconds) });
+      // Fit map to show full route
+      const coords = result.geometry.coordinates as [number, number][];
+      const lngs = coords.map(c => c[0]);
+      const lats = coords.map(c => c[1]);
+      mapRef.current?.fitBounds(
+        [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+        { padding: 60, duration: 800 }
+      );
+    } catch {
+      setRouteInfo({ distance: '—', duration: 'Route unavailable' });
+    } finally {
+      setRouteLoading(false);
+    }
+  }, []);
 
   const selectedPlace = places.find((p) => p.id === selectedId) ?? null;
 
@@ -425,8 +457,38 @@ export default function Locator() {
             initialViewState={{ latitude: lat, longitude: lng, zoom: 14 }}
             style={{ width: '100%', height: '100%' }}
             attributionControl={false}
-            onClick={() => setSelectedId(null)}>
+            onClick={() => { setSelectedId(null); }}>
             <NavigationControl position="top-right" />
+
+            {/* Radius circle */}
+            <Source id="radius" type="geojson" data={createRadiusCircle(lng, lat, radius)}>
+              <Layer id="radius-fill" type="fill" paint={{
+                'fill-color': '#00E5C3',
+                'fill-opacity': 0.07,
+              }} />
+              <Layer id="radius-stroke" type="line" paint={{
+                'line-color': '#00E5C3',
+                'line-width': 1.5,
+                'line-opacity': 0.4,
+                'line-dasharray': [4, 3],
+              }} />
+            </Source>
+
+            {/* Route line */}
+            {routeGeoJSON && (
+              <Source id="route" type="geojson" data={{ type: 'Feature', geometry: routeGeoJSON, properties: {} }}>
+                <Layer id="route-casing" type="line" paint={{
+                  'line-color': '#00E5C3',
+                  'line-width': 8,
+                  'line-opacity': 0.15,
+                }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
+                <Layer id="route-line" type="line" paint={{
+                  'line-color': '#00E5C3',
+                  'line-width': 4,
+                  'line-opacity': 0.9,
+                }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
+              </Source>
+            )}
 
             <UserMarker lat={lat} lng={lng} />
 
@@ -434,14 +496,39 @@ export default function Locator() {
               <PlaceMarker key={p.id} place={p} isSelected={selectedId === p.id}
                 onClick={() => {
                   setSelectedId(p.id);
+                  setRouteGeoJSON(null); setRouteInfo(null);
                   mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom: 16, duration: 700 });
                 }} />
             ))}
 
             {selectedPlace && (
-              <PlacePopup place={selectedPlace} userLat={lat} userLng={lng} onClose={() => setSelectedId(null)} />
+              <PlacePopup
+                place={selectedPlace}
+                onRoute={() => handleRoute(selectedPlace, lat, lng)}
+                onClose={() => setSelectedId(null)}
+              />
             )}
           </Map>
+
+          {/* Route info card */}
+          {(routeLoading || routeInfo) && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-card/95 backdrop-blur-sm border border-teal/40 rounded-2xl px-5 py-3 flex items-center gap-4 shadow-teal-glow">
+              {routeLoading
+                ? <><div className="w-4 h-4 border-2 border-teal/30 border-t-teal rounded-full animate-spin" />
+                    <span className="font-mono text-xs text-teal">Calculating route…</span></>
+                : <>
+                    <span className="font-mono text-sm font-bold text-teal">{routeInfo?.distance}</span>
+                    <span className="text-border-mid">·</span>
+                    <span className="font-mono text-sm text-text-muted">{routeInfo?.duration}</span>
+                    <span className="text-border-mid">·</span>
+                    <span className="font-body text-xs text-text-faint">driving</span>
+                    <button onClick={() => { setRouteGeoJSON(null); setRouteInfo(null); }}
+                      className="text-text-faint hover:text-coral transition-colors ml-1">✕</button>
+                  </>
+              }
+            </div>
+          )}
+        </div>
 
           {/* Legend */}
           <div className="absolute bottom-4 left-4 flex flex-wrap gap-2 pointer-events-none max-w-xs">
