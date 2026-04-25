@@ -1,116 +1,64 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import Map, { Marker, Popup, NavigationControl, GeolocateControl } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import {
-  MOCK_HOSPITALS, MOCK_USER_LOCATION, ALL_SPECIALTIES,
-  type Hospital, type Specialty,
-} from '../mock/mockHospitals';
+import { useGeolocation } from '../hooks/useGeolocation';
+import { fetchNearbyPlaces, type NearbyPlace, type PlaceType } from '../services/overpassService';
+import { MOCK_HOSPITALS, MOCK_USER_LOCATION } from '../mock/mockHospitals';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-// Free dark basemap — no API key required
 const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
-const SPECIALTY_ICONS: Partial<Record<Specialty, string>> = {
-  Cardiology: '❤️',
-  Orthopedics: '🦴',
-  Neurology: '🧠',
-  Endocrinology: '🔬',
-  Nephrology: '💧',
-  Oncology: '🎗️',
-  Ophthalmology: '👁️',
-  'General Medicine': '🏥',
-  Pediatrics: '👶',
-  Dermatology: '🧴',
+const PLACE_META: Record<PlaceType, { icon: string; label: string; color: string }> = {
+  hospital:   { icon: '🏥', label: 'Hospital',   color: '#FF4A6E' },
+  clinic:     { icon: '🩺', label: 'Clinic',     color: '#00E5C3' },
+  pharmacy:   { icon: '💊', label: 'Pharmacy',   color: '#A78BFA' },
+  doctor:     { icon: '👨‍⚕️', label: 'Doctor',   color: '#F5A623' },
+  dentist:    { icon: '🦷', label: 'Dentist',    color: '#60A5FA' },
+  laboratory: { icon: '🔬', label: 'Laboratory', color: '#34D399' },
 };
 
-const TYPE_BADGE: Record<Hospital['type'], string> = {
-  hospital: 'badge-coral',
-  clinic: 'badge-teal',
-  diagnostic: 'badge-amber',
-};
-
-const TYPE_LABEL: Record<Hospital['type'], string> = {
-  hospital: 'Hospital',
-  clinic: 'Clinic',
-  diagnostic: 'Diagnostic',
-};
-
-function StarRating({ rating }: { rating: number }) {
-  return (
-    <span className="font-mono text-xs text-amber flex items-center gap-1">
-      ★ {rating.toFixed(1)}
-    </span>
-  );
-}
+const ALL_TYPES: PlaceType[] = ['hospital', 'clinic', 'pharmacy', 'doctor', 'dentist', 'laboratory'];
 
 // ─── Map Marker ───────────────────────────────────────────────────────────────
 
-function HospitalMarker({
-  hospital,
-  isSelected,
-  onClick,
-}: {
-  hospital: Hospital;
+function PlaceMarker({ place, isSelected, onClick }: {
+  place: NearbyPlace;
   isSelected: boolean;
   onClick: () => void;
 }) {
-  const isEmergency = hospital.emergencyAvailable;
-  const baseColor = isSelected
-    ? '#00E5C3'
-    : isEmergency
-      ? '#FF4A6E'
-      : '#F5A623';
+  const meta = PLACE_META[place.placeType];
+  const color = isSelected ? '#00E5C3' : meta.color;
 
   return (
     <Marker
-      latitude={hospital.lat}
-      longitude={hospital.lng}
+      latitude={place.lat}
+      longitude={place.lng}
       anchor="bottom"
       onClick={(e) => { e.originalEvent.stopPropagation(); onClick(); }}
     >
       <div
-        className="cursor-pointer transition-transform duration-150 hover:scale-110"
-        style={{ filter: isSelected ? 'drop-shadow(0 0 8px rgba(0,229,195,0.6))' : undefined }}
+        style={{ filter: isSelected ? 'drop-shadow(0 0 8px rgba(0,229,195,0.7))' : undefined }}
+        className="cursor-pointer transition-transform duration-150 hover:scale-110 active:scale-95"
       >
-        <svg width="32" height="42" viewBox="0 0 32 42" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M16 0C7.163 0 0 7.163 0 16C0 24.837 16 42 16 42C16 42 32 24.837 32 16C32 7.163 24.837 0 16 0Z"
-            fill={baseColor}
-          />
-          <text
-            x="16"
-            y="19"
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fontSize="13"
-            fill="white"
-            fontWeight="bold"
-          >
-            {hospital.type === 'hospital' ? '🏥' : hospital.type === 'clinic' ? '🩺' : '🔬'}
+        <svg width="30" height="40" viewBox="0 0 30 40" fill="none">
+          <path d="M15 0C6.716 0 0 6.716 0 15C0 23.284 15 40 15 40C15 40 30 23.284 30 15C30 6.716 23.284 0 15 0Z"
+            fill={color} fillOpacity={isSelected ? 1 : 0.88} />
+          <text x="15" y="17" textAnchor="middle" dominantBaseline="middle" fontSize="12" fill="white">
+            {meta.icon}
           </text>
         </svg>
-        {isSelected && (
-          <div
-            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 whitespace-nowrap
-                       bg-void border border-teal/40 text-teal text-xs font-mono px-2 py-0.5 rounded-full"
-          >
-            {hospital.name.split(' ').slice(0, 2).join(' ')}
-          </div>
-        )}
       </div>
     </Marker>
   );
 }
 
-// ─── User location marker ────────────────────────────────────────────────────
-
-function UserMarker() {
+function UserMarker({ lat, lng }: { lat: number; lng: number }) {
   return (
-    <Marker latitude={MOCK_USER_LOCATION.lat} longitude={MOCK_USER_LOCATION.lng} anchor="center">
+    <Marker latitude={lat} longitude={lng} anchor="center">
       <div className="relative">
-        <div className="w-4 h-4 rounded-full bg-teal border-2 border-white shadow-lg" />
-        <div className="absolute inset-0 rounded-full bg-teal/30 animate-ping" />
+        <div className="w-4 h-4 rounded-full bg-teal border-2 border-white shadow-lg z-10 relative" />
+        <div className="absolute inset-0 rounded-full bg-teal/40 animate-ping" />
       </div>
     </Marker>
   );
@@ -118,146 +66,117 @@ function UserMarker() {
 
 // ─── Detail Popup ─────────────────────────────────────────────────────────────
 
-function HospitalPopup({ hospital, onClose }: { hospital: Hospital; onClose: () => void }) {
-  const gmapsUrl = `https://www.google.com/maps/dir/${MOCK_USER_LOCATION.lat},${MOCK_USER_LOCATION.lng}/${hospital.lat},${hospital.lng}`;
+function PlacePopup({ place, userLat, userLng, onClose }: {
+  place: NearbyPlace;
+  userLat: number;
+  userLng: number;
+  onClose: () => void;
+}) {
+  const meta = PLACE_META[place.placeType];
+  const gmapsDir = `https://www.google.com/maps/dir/${userLat},${userLng}/${place.lat},${place.lng}`;
+  const gmapsSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}&query_place_id=${place.lat},${place.lng}`;
 
   return (
     <Popup
-      latitude={hospital.lat}
-      longitude={hospital.lng}
+      latitude={place.lat}
+      longitude={place.lng}
       anchor="bottom"
-      offset={48}
+      offset={46}
       onClose={onClose}
       closeButton={false}
       className="mv-popup"
       maxWidth="300px"
     >
-      <div className="bg-card border border-border-mid rounded-xl shadow-card p-4 min-w-[260px]">
+      <div className="bg-card border border-border-mid rounded-xl shadow-card p-4 min-w-[260px] max-w-[290px]">
         {/* Header */}
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className={TYPE_BADGE[hospital.type]}>{TYPE_LABEL[hospital.type]}</span>
-              {hospital.emergencyAvailable && (
-                <span className="badge-coral text-xs">🚨 24h Emergency</span>
+              <span className="text-xs font-body px-2 py-0.5 rounded-full border"
+                style={{ color: meta.color, borderColor: `${meta.color}40`, background: `${meta.color}15` }}>
+                {meta.icon} {meta.label}
+              </span>
+              {place.emergencyAvailable && (
+                <span className="badge-coral text-xs">🚨 24h</span>
               )}
             </div>
-            <h3 className="font-sans font-semibold text-text-primary text-sm leading-tight">
-              {hospital.name}
-            </h3>
+            <h3 className="font-sans font-semibold text-sm text-text-primary leading-tight">{place.name}</h3>
           </div>
-          <button onClick={onClose} className="text-text-faint hover:text-text-primary text-lg leading-none">✕</button>
+          <button onClick={onClose} className="text-text-faint hover:text-text-primary text-lg leading-none flex-shrink-0">✕</button>
         </div>
 
-        {/* Meta */}
+        {/* Details */}
         <div className="space-y-1.5 mb-3">
           <p className="font-body text-xs text-text-muted flex gap-2">
-            <span>📍</span><span>{hospital.address}</span>
+            <span>📍</span><span className="flex-1">{place.address}</span>
           </p>
-          <p className="font-body text-xs text-text-muted flex gap-2">
-            <span>📞</span>
-            <a href={`tel:${hospital.phone}`} className="hover:text-teal transition-colors">
-              {hospital.phone}
-            </a>
-          </p>
-          <p className="font-body text-xs text-text-muted flex gap-2">
-            <span>⏰</span><span>{hospital.timings}</span>
-          </p>
-          <div className="flex items-center gap-3">
-            <StarRating rating={hospital.rating} />
-            {hospital.bedCount && (
-              <span className="font-mono text-xs text-text-faint">{hospital.bedCount} beds</span>
-            )}
-            <span className="font-mono text-xs text-teal">{hospital.distanceKm} km away</span>
-          </div>
-        </div>
-
-        {/* Specialties */}
-        <div className="flex flex-wrap gap-1.5 mb-4">
-          {hospital.specialties.map((s) => (
-            <span key={s} className="text-xs font-body text-text-faint bg-surface border border-border-dim px-2 py-0.5 rounded-full">
-              {SPECIALTY_ICONS[s] || '🏥'} {s}
-            </span>
-          ))}
+          {place.phone && (
+            <p className="font-body text-xs text-text-muted flex gap-2">
+              <span>📞</span>
+              <a href={`tel:${place.phone}`} className="hover:text-teal transition-colors">{place.phone}</a>
+            </p>
+          )}
+          {place.openingHours && (
+            <p className="font-body text-xs text-text-muted flex gap-2">
+              <span>⏰</span><span className="flex-1">{place.openingHours}</span>
+            </p>
+          )}
+          <p className="font-mono text-xs text-teal">{place.distanceKm} km away</p>
         </div>
 
         {/* Actions */}
         <div className="flex gap-2">
-          <a
-            href={gmapsUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="btn-primary flex-1 text-center text-xs py-2"
-          >
-            🗺️ Get Directions
+          <a href={gmapsDir} target="_blank" rel="noreferrer"
+            className="btn-primary flex-1 text-center text-xs py-2">
+            🗺️ Directions
           </a>
-          <a
-            href={`tel:${hospital.phone}`}
-            className="btn-ghost px-3 text-xs py-2"
-          >
-            📞
+          <a href={gmapsSearch} target="_blank" rel="noreferrer"
+            className="btn-ghost px-3 text-xs py-2" title="View on Maps">
+            🔍
           </a>
+          {place.phone && (
+            <a href={`tel:${place.phone}`} className="btn-ghost px-3 text-xs py-2">📞</a>
+          )}
         </div>
       </div>
     </Popup>
   );
 }
 
-// ─── Hospital List Card ───────────────────────────────────────────────────────
+// ─── List Card ────────────────────────────────────────────────────────────────
 
-function HospitalListCard({
-  hospital,
-  isSelected,
-  onClick,
-}: {
-  hospital: Hospital;
+function PlaceCard({ place, isSelected, onClick }: {
+  place: NearbyPlace;
   isSelected: boolean;
   onClick: () => void;
 }) {
+  const meta = PLACE_META[place.placeType];
+
   return (
-    <div
-      onClick={onClick}
-      className={`
-        mv-card cursor-pointer transition-all duration-150 animate-fade-in
-        ${isSelected ? 'border-teal/50 shadow-teal-glow bg-card-hover' : ''}
-      `}
+    <div onClick={onClick}
+      className={`mv-card cursor-pointer transition-all duration-150 animate-fade-in
+        ${isSelected ? 'border-teal/50 shadow-teal-glow' : ''}`}
     >
       <div className="flex items-start gap-3">
-        {/* Icon */}
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0
-          ${hospital.emergencyAvailable ? 'bg-coral/15' : 'bg-surface'}`}>
-          {hospital.type === 'hospital' ? '🏥' : hospital.type === 'clinic' ? '🩺' : '🔬'}
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+          style={{ background: `${meta.color}20` }}>
+          {meta.icon}
         </div>
-
         <div className="flex-1 min-w-0">
-          {/* Name + type */}
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <span className={`${TYPE_BADGE[hospital.type]} text-xs`}>{TYPE_LABEL[hospital.type]}</span>
-            {hospital.emergencyAvailable && (
-              <span className="badge-coral text-xs">🚨 Emergency</span>
+            <span className="text-xs font-body px-1.5 py-0.5 rounded-full"
+              style={{ color: meta.color, background: `${meta.color}20` }}>
+              {meta.label}
+            </span>
+            {place.emergencyAvailable && (
+              <span className="badge-coral text-xs">🚨 24h</span>
             )}
           </div>
-          <h3 className="font-sans font-medium text-sm text-text-primary leading-snug truncate">
-            {hospital.name}
-          </h3>
-          <p className="font-body text-xs text-text-muted truncate">{hospital.area}</p>
-
-          {/* Stats row */}
-          <div className="flex items-center gap-3 mt-1.5">
-            <StarRating rating={hospital.rating} />
-            <span className="font-mono text-xs text-teal">{hospital.distanceKm} km</span>
-            {hospital.bedCount && (
-              <span className="font-mono text-xs text-text-faint">{hospital.bedCount} beds</span>
-            )}
-          </div>
-
-          {/* Top 2 specialties */}
-          <div className="flex gap-1 mt-1.5 flex-wrap">
-            {hospital.specialties.slice(0, 3).map((s) => (
-              <span key={s} className="text-xs text-text-faint bg-surface border border-border-dim px-1.5 py-0.5 rounded-full">
-                {SPECIALTY_ICONS[s]} {s}
-              </span>
-            ))}
+          <h3 className="font-sans font-medium text-sm text-text-primary leading-snug truncate">{place.name}</h3>
+          <p className="font-body text-xs text-text-muted truncate">{place.address}</p>
+          <div className="flex items-center gap-3 mt-1">
+            <span className="font-mono text-xs text-teal font-semibold">{place.distanceKm} km</span>
+            {place.phone && <span className="font-mono text-xs text-text-faint">{place.phone}</span>}
           </div>
         </div>
       </div>
@@ -265,206 +184,354 @@ function HospitalListCard({
   );
 }
 
+// ─── Status Banner ────────────────────────────────────────────────────────────
+
+function StatusBanner({ status, error, onRetry }: {
+  status: string;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  if (status === 'granted') return null;
+
+  return (
+    <div className={`flex items-center gap-3 px-4 py-3 text-sm font-body flex-shrink-0
+      ${status === 'denied' ? 'bg-coral/10 border-b border-coral/30 text-coral'
+      : status === 'requesting' ? 'bg-teal/10 border-b border-teal/20 text-teal'
+      : 'bg-amber/10 border-b border-amber/20 text-amber'}`}
+    >
+      {status === 'requesting' && (
+        <><span className="animate-spin">⏳</span> Getting your location…</>
+      )}
+      {status === 'denied' && (
+        <>
+          <span>⚠️</span>
+          <span className="flex-1">{error} · Showing demo data for Bandra, Mumbai</span>
+          <button onClick={onRetry} className="underline hover:no-underline flex-shrink-0">Retry</button>
+        </>
+      )}
+      {status === 'unavailable' && (
+        <><span>⚠️</span> Geolocation not available · Showing demo data</>
+      )}
+      {status === 'idle' && (
+        <><span>📍</span> Waiting for location…</>
+      )}
+    </div>
+  );
+}
+
+// ─── Loading overlay ──────────────────────────────────────────────────────────
+
+function LoadingOverlay({ message }: { message: string }) {
+  return (
+    <div className="absolute inset-0 bg-void/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-10">
+      <div className="w-12 h-12 border-2 border-teal/30 border-t-teal rounded-full animate-spin" />
+      <p className="font-mono text-sm text-teal">{message}</p>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+function toNearbyPlace(h: typeof MOCK_HOSPITALS[number]): NearbyPlace {
+  return {
+    id: h.id,
+    name: h.name,
+    placeType: h.type === 'diagnostic' ? 'laboratory' : h.type,
+    lat: h.lat,
+    lng: h.lng,
+    address: h.address,
+    phone: h.phone,
+    openingHours: h.timings,
+    emergencyAvailable: h.emergencyAvailable,
+    distanceKm: h.distanceKm,
+    tags: {},
+  };
+}
+
 export default function Locator() {
+  const { location, status: geoStatus, error: geoError, request: requestGeo } = useGeolocation(true);
+
+  const [places, setPlaces] = useState<NearbyPlace[]>([]);
+  const [fetchStatus, setFetchStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [radius, setRadius] = useState(3000);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [activeSpecialties, setActiveSpecialties] = useState<Set<Specialty>>(new Set());
+  const [activeTypes, setActiveTypes] = useState<Set<PlaceType>>(new Set());
   const [emergencyOnly, setEmergencyOnly] = useState(false);
-  const [activeType, setActiveType] = useState<Hospital['type'] | 'all'>('all');
+
   const mapRef = useRef<any>(null);
 
-  const selectedHospital = MOCK_HOSPITALS.find((h) => h.id === selectedId) ?? null;
+  const userLat = location?.lat ?? MOCK_USER_LOCATION.lat;
+  const userLng = location?.lng ?? MOCK_USER_LOCATION.lng;
+  const usingRealLocation = geoStatus === 'granted' && !!location;
 
-  const filtered = MOCK_HOSPITALS.filter((h) => {
-    const matchSearch = !search || h.name.toLowerCase().includes(search.toLowerCase()) ||
-      h.area.toLowerCase().includes(search.toLowerCase()) ||
-      h.specialties.some((s) => s.toLowerCase().includes(search.toLowerCase()));
-    const matchEmergency = !emergencyOnly || h.emergencyAvailable;
-    const matchType = activeType === 'all' || h.type === activeType;
-    const matchSpecialty = activeSpecialties.size === 0 ||
-      h.specialties.some((s) => activeSpecialties.has(s));
-    return matchSearch && matchEmergency && matchType && matchSpecialty;
-  }).sort((a, b) => a.distanceKm - b.distanceKm);
+  // Fetch from Overpass when we have a location
+  const doFetch = useCallback(async (lat: number, lng: number, r: number) => {
+    setFetchStatus('loading');
+    setFetchError(null);
+    try {
+      const results = await fetchNearbyPlaces(lat, lng, r);
+      if (results.length === 0) {
+        // OSM data can be sparse — fall back to mock + notify
+        setPlaces(MOCK_HOSPITALS.map(toNearbyPlace));
+        setFetchError('No OpenStreetMap data found in this area — showing demo data');
+      } else {
+        setPlaces(results);
+      }
+      setFetchStatus('done');
+    } catch (e: any) {
+      console.warn('Overpass fetch failed:', e);
+      setPlaces(MOCK_HOSPITALS.map(toNearbyPlace));
+      setFetchError('Could not reach OpenStreetMap API — showing demo data');
+      setFetchStatus('error');
+    }
+  }, []);
 
-  const toggleSpecialty = useCallback((s: Specialty) => {
-    setActiveSpecialties((prev) => {
+  // Re-fetch when location becomes available or radius changes
+  useEffect(() => {
+    if (geoStatus === 'granted' && location) {
+      doFetch(location.lat, location.lng, radius);
+    } else if (geoStatus === 'denied' || geoStatus === 'unavailable') {
+      setPlaces(MOCK_HOSPITALS.map(toNearbyPlace));
+      setFetchStatus('done');
+    }
+  }, [geoStatus, location, radius, doFetch]);
+
+  // Fly map to user when location arrives
+  useEffect(() => {
+    if (location && mapRef.current) {
+      mapRef.current.flyTo({
+        center: [location.lng, location.lat],
+        zoom: 14,
+        duration: 1200,
+      });
+    }
+  }, [location]);
+
+  const selectedPlace = places.find((p) => p.id === selectedId) ?? null;
+
+  const filtered = places.filter((p) => {
+    const matchSearch = !search
+      || p.name.toLowerCase().includes(search.toLowerCase())
+      || p.address.toLowerCase().includes(search.toLowerCase())
+      || p.placeType.includes(search.toLowerCase());
+    const matchType = activeTypes.size === 0 || activeTypes.has(p.placeType);
+    const matchEmergency = !emergencyOnly || p.emergencyAvailable;
+    return matchSearch && matchType && matchEmergency;
+  });
+
+  const handleSelect = (place: NearbyPlace) => {
+    setSelectedId(place.id);
+    mapRef.current?.flyTo({ center: [place.lng, place.lat], zoom: 16, duration: 700 });
+  };
+
+  const toggleType = (t: PlaceType) => {
+    setActiveTypes((prev) => {
       const next = new Set(prev);
-      next.has(s) ? next.delete(s) : next.add(s);
+      next.has(t) ? next.delete(t) : next.add(t);
       return next;
     });
-  }, []);
+  };
 
-  const flyTo = useCallback((hospital: Hospital) => {
-    mapRef.current?.flyTo({
-      center: [hospital.lng, hospital.lat],
-      zoom: 15,
-      duration: 800,
-    });
-  }, []);
-
-  const handleSelect = useCallback((hospital: Hospital) => {
-    setSelectedId(hospital.id);
-    flyTo(hospital);
-  }, [flyTo]);
+  // Count by type for badges
+  const typeCounts = ALL_TYPES.reduce((acc, t) => {
+    acc[t] = places.filter((p) => p.placeType === t).length;
+    return acc;
+  }, {} as Record<PlaceType, number>);
 
   return (
     <div className="flex flex-col h-screen">
+      {/* Geo status banner */}
+      <StatusBanner status={geoStatus} error={geoError} onRetry={requestGeo} />
+
+      {/* Soft fetch error banner */}
+      {fetchError && fetchStatus !== 'loading' && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-amber/10 border-b border-amber/20 text-amber text-xs font-body flex-shrink-0">
+          <span>⚠️</span>{fetchError}
+        </div>
+      )}
+
       {/* Top bar */}
-      <div className="flex items-center gap-4 px-6 py-4 border-b border-border-dim bg-surface/80 backdrop-blur-sm flex-shrink-0">
+      <div className="flex items-center gap-4 px-6 py-3 border-b border-border-dim bg-surface/80 backdrop-blur-sm flex-shrink-0 flex-wrap gap-y-2">
         <div>
-          <h1 className="font-sans font-bold text-xl text-text-primary">Hospital & Clinic Locator</h1>
+          <h1 className="font-sans font-bold text-lg text-text-primary">Nearby Healthcare</h1>
           <p className="font-body text-xs text-text-muted">
-            📍 {MOCK_USER_LOCATION.label} · {filtered.length} results
+            {usingRealLocation
+              ? `📍 Your location · ${filtered.length} of ${places.length} places`
+              : `📍 Demo: Bandra, Mumbai · ${filtered.length} results`}
           </p>
+        </div>
+
+        {/* Radius selector */}
+        <div className="flex items-center gap-2 ml-auto">
+          <span className="font-mono text-xs text-text-faint">Radius</span>
+          {[1000, 2000, 3000, 5000].map((r) => (
+            <button key={r}
+              onClick={() => setRadius(r)}
+              className={`px-2.5 py-1 rounded-full text-xs font-mono transition-all
+                ${radius === r ? 'bg-teal text-teal-text' : 'bg-surface border border-border-dim text-text-muted hover:border-teal/40'}`}
+            >
+              {r >= 1000 ? `${r / 1000}km` : `${r}m`}
+            </button>
+          ))}
         </div>
 
         {/* Emergency toggle */}
         <button
           onClick={() => setEmergencyOnly((v) => !v)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-sans font-medium transition-all duration-150 flex-shrink-0 ml-auto
-            ${emergencyOnly ? 'bg-coral text-coral-text' : 'bg-surface border border-border-mid text-text-muted hover:border-coral/40 hover:text-coral'}`}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-sans font-medium transition-all flex-shrink-0
+            ${emergencyOnly ? 'bg-coral text-coral-text' : 'bg-surface border border-border-mid text-text-muted hover:border-coral/40'}`}
         >
-          🚨 {emergencyOnly ? 'Emergency Only' : 'All Facilities'}
+          🚨 {emergencyOnly ? '24h Only' : 'All'}
         </button>
       </div>
 
       {/* Main split */}
       <div className="flex flex-1 overflow-hidden">
         {/* ── Sidebar ─────────────────────────────────────── */}
-        <div className="w-80 flex flex-col border-r border-border-dim flex-shrink-0 bg-void">
-          {/* Search + type filter */}
-          <div className="px-4 py-3 border-b border-border-dim space-y-3">
+        <div className="w-80 flex flex-col border-r border-border-dim bg-void flex-shrink-0">
+          {/* Search */}
+          <div className="px-4 py-3 border-b border-border-dim">
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-faint text-sm">🔍</span>
               <input
                 className="mv-input pl-8 text-sm"
-                placeholder="Search by name, area, specialty…"
+                placeholder="Hospital, pharmacy, clinic…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-
-            {/* Type chips */}
-            <div className="flex gap-2">
-              {(['all', 'hospital', 'clinic', 'diagnostic'] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setActiveType(t)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-body transition-all capitalize
-                    ${activeType === t
-                      ? 'bg-teal text-teal-text font-medium'
-                      : 'bg-surface border border-border-dim text-text-muted hover:border-teal/40'
-                    }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
           </div>
 
-          {/* Specialty filter */}
+          {/* Type filter */}
           <div className="px-4 py-3 border-b border-border-dim">
-            <p className="font-body text-xs text-text-faint mb-2 uppercase tracking-wider">Specialty</p>
+            <p className="font-body text-xs text-text-faint uppercase tracking-wider mb-2">Type</p>
             <div className="flex flex-wrap gap-1.5">
-              {ALL_SPECIALTIES.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => toggleSpecialty(s)}
-                  className={`px-2 py-1 rounded-full text-xs font-body transition-all
-                    ${activeSpecialties.has(s)
-                      ? 'bg-amber/20 border border-amber/50 text-amber'
-                      : 'bg-surface border border-border-dim text-text-faint hover:border-amber/30'
-                    }`}
-                >
-                  {SPECIALTY_ICONS[s]} {s}
-                </button>
-              ))}
-              {activeSpecialties.size > 0 && (
-                <button
-                  onClick={() => setActiveSpecialties(new Set())}
-                  className="text-xs text-text-faint hover:text-coral transition-colors px-2 py-1"
-                >
+              {ALL_TYPES.map((t) => {
+                const meta = PLACE_META[t];
+                const count = typeCounts[t];
+                if (count === 0) return null;
+                return (
+                  <button key={t} onClick={() => toggleType(t)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-body transition-all flex items-center gap-1
+                      ${activeTypes.has(t) ? 'font-medium' : 'bg-surface border border-border-dim text-text-faint hover:border-border-mid'}`}
+                    style={activeTypes.has(t) ? {
+                      background: `${meta.color}25`, color: meta.color, borderColor: `${meta.color}50`, border: '1px solid'
+                    } : {}}
+                  >
+                    {meta.icon} {meta.label}
+                    <span className="opacity-60">({count})</span>
+                  </button>
+                );
+              })}
+              {activeTypes.size > 0 && (
+                <button onClick={() => setActiveTypes(new Set())}
+                  className="text-xs text-text-faint hover:text-coral px-2 py-1 transition-colors">
                   Clear ✕
                 </button>
               )}
             </div>
           </div>
 
-          {/* Hospital list */}
+          {/* Results list */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {filtered.length === 0 && (
-              <div className="text-center py-12">
-                <span className="text-3xl block mb-2">🏥</span>
-                <p className="font-body text-sm text-text-muted">No facilities match your filters</p>
+            {fetchStatus === 'loading' && (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="w-8 h-8 border-2 border-teal/30 border-t-teal rounded-full animate-spin" />
+                <p className="font-mono text-xs text-teal">Searching nearby…</p>
               </div>
             )}
-            {filtered.map((h) => (
-              <HospitalListCard
-                key={h.id}
-                hospital={h}
-                isSelected={selectedId === h.id}
-                onClick={() => handleSelect(h)}
-              />
+            {fetchStatus !== 'loading' && filtered.length === 0 && (
+              <div className="text-center py-12">
+                <span className="text-3xl block mb-2">🔍</span>
+                <p className="font-body text-sm text-text-muted">No results — try adjusting filters or radius</p>
+              </div>
+            )}
+            {fetchStatus !== 'loading' && filtered.map((p) => (
+              <PlaceCard key={p.id} place={p} isSelected={selectedId === p.id} onClick={() => handleSelect(p)} />
             ))}
           </div>
+
+          {/* Refresh button */}
+          {usingRealLocation && (
+            <div className="p-3 border-t border-border-dim">
+              <button
+                onClick={() => doFetch(userLat, userLng, radius)}
+                disabled={fetchStatus === 'loading'}
+                className="w-full btn-ghost text-sm disabled:opacity-50"
+              >
+                {fetchStatus === 'loading' ? '⏳ Refreshing…' : '🔄 Refresh nearby places'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ── Map ──────────────────────────────────────────── */}
         <div className="flex-1 relative">
+          {fetchStatus === 'loading' && <LoadingOverlay message="Loading nearby places from OpenStreetMap…" />}
+
           <Map
             ref={mapRef}
             mapStyle={MAP_STYLE}
-            initialViewState={{
-              latitude: MOCK_USER_LOCATION.lat,
-              longitude: MOCK_USER_LOCATION.lng,
-              zoom: 13,
-            }}
+            initialViewState={{ latitude: userLat, longitude: userLng, zoom: 14 }}
             style={{ width: '100%', height: '100%' }}
             attributionControl={false}
+            onClick={() => setSelectedId(null)}
           >
             <NavigationControl position="top-right" />
-            <GeolocateControl position="top-right" />
+            <GeolocateControl
+              position="top-right"
+              trackUserLocation
+              onGeolocate={(e) => {
+                // If the built-in GeolocateControl fires, re-fetch with its coords
+                doFetch(e.coords.latitude, e.coords.longitude, radius);
+              }}
+            />
 
-            {/* User location */}
-            <UserMarker />
+            {/* User dot */}
+            <UserMarker lat={userLat} lng={userLng} />
 
-            {/* Hospital markers — show all, highlight filtered */}
-            {MOCK_HOSPITALS.map((h) => {
-              const isFiltered = filtered.some((f) => f.id === h.id);
-              return (
-                <HospitalMarker
-                  key={h.id}
-                  hospital={h}
-                  isSelected={selectedId === h.id}
-                  onClick={() => isFiltered ? handleSelect(h) : undefined}
-                />
-              );
-            })}
+            {/* Place markers */}
+            {filtered.map((p) => (
+              <PlaceMarker key={p.id} place={p} isSelected={selectedId === p.id} onClick={() => handleSelect(p)} />
+            ))}
 
-            {/* Selected popup */}
-            {selectedHospital && (
-              <HospitalPopup
-                hospital={selectedHospital}
+            {/* Popup */}
+            {selectedPlace && (
+              <PlacePopup
+                place={selectedPlace}
+                userLat={userLat}
+                userLng={userLng}
                 onClose={() => setSelectedId(null)}
               />
             )}
           </Map>
 
-          {/* Stats overlay */}
-          <div className="absolute bottom-4 left-4 flex gap-2 pointer-events-none">
-            <div className="bg-card/90 backdrop-blur-sm border border-border-dim rounded-lg px-3 py-2 flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-coral flex-shrink-0" />
-              <span className="font-mono text-xs text-text-muted">Emergency</span>
+          {/* Legend */}
+          <div className="absolute bottom-4 left-4 flex flex-wrap gap-2 pointer-events-none max-w-sm">
+            {ALL_TYPES.filter((t) => typeCounts[t] > 0).map((t) => {
+              const meta = PLACE_META[t];
+              return (
+                <div key={t} className="bg-card/90 backdrop-blur-sm border border-border-dim rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: meta.color }} />
+                  <span className="font-mono text-xs text-text-muted">{meta.label}</span>
+                </div>
+              );
+            })}
+            <div className="bg-card/90 backdrop-blur-sm border border-border-dim rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-teal animate-pulse flex-shrink-0" />
+              <span className="font-mono text-xs text-text-muted">You</span>
             </div>
-            <div className="bg-card/90 backdrop-blur-sm border border-border-dim rounded-lg px-3 py-2 flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-amber flex-shrink-0" />
-              <span className="font-mono text-xs text-text-muted">Clinic / Lab</span>
-            </div>
-            <div className="bg-card/90 backdrop-blur-sm border border-border-dim rounded-lg px-3 py-2 flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-teal flex-shrink-0 animate-pulse" />
-              <span className="font-mono text-xs text-text-muted">Your location</span>
+          </div>
+
+          {/* Data source badge */}
+          <div className="absolute bottom-4 right-4 pointer-events-none">
+            <div className="bg-card/90 backdrop-blur-sm border border-border-dim rounded-lg px-2.5 py-1.5">
+              <span className="font-mono text-xs text-text-faint">
+                {usingRealLocation ? '🌐 Live · OpenStreetMap' : '📋 Demo data'}
+              </span>
             </div>
           </div>
         </div>
