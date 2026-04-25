@@ -144,7 +144,9 @@ export default function Dashboard() {
         <div className="mv-card flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h2 className="section-title">⚠️ Anomalies</h2>
-            <span className="badge-coral">{anomalies?.length || 0}</span>
+            <Link to="/app/alerts" className="badge-coral hover:opacity-80 transition-opacity">
+              {anomalies?.length || 0} · View all →
+            </Link>
           </div>
           <div className="flex flex-col gap-3 overflow-y-auto max-h-56">
             {aLoading && <CardSkeleton />}
