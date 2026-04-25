@@ -4,7 +4,6 @@ import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { ModeProvider } from './context/ModeContext';
 import { SocketProvider } from './context/SocketContext';
-n
 import { AuthProvider } from './context/AuthContext';
 import { Splash } from './components/shared/Splash';
 import { ThemeProvider } from './context/ThemeStateContext';
