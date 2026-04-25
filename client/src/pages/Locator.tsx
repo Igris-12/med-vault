@@ -1,11 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import Map, { Marker, Popup, NavigationControl, GeolocateControl } from 'react-map-gl/maplibre';
+import Map, { Marker, Popup, NavigationControl } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useGeolocation } from '../hooks/useGeolocation';
 import { fetchNearbyPlaces, type NearbyPlace, type PlaceType } from '../services/overpassService';
-import { MOCK_HOSPITALS, MOCK_USER_LOCATION } from '../mock/mockHospitals';
-
-// ─── Config ──────────────────────────────────────────────────────────────────
 
 const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
@@ -20,30 +16,21 @@ const PLACE_META: Record<PlaceType, { icon: string; label: string; color: string
 
 const ALL_TYPES: PlaceType[] = ['hospital', 'clinic', 'pharmacy', 'doctor', 'dentist', 'laboratory'];
 
-// ─── Map Marker ───────────────────────────────────────────────────────────────
+// ─── Markers ─────────────────────────────────────────────────────────────────
 
 function PlaceMarker({ place, isSelected, onClick }: {
-  place: NearbyPlace;
-  isSelected: boolean;
-  onClick: () => void;
+  place: NearbyPlace; isSelected: boolean; onClick: () => void;
 }) {
   const meta = PLACE_META[place.placeType];
   const color = isSelected ? '#00E5C3' : meta.color;
-
   return (
-    <Marker
-      latitude={place.lat}
-      longitude={place.lng}
-      anchor="bottom"
-      onClick={(e) => { e.originalEvent.stopPropagation(); onClick(); }}
-    >
-      <div
-        style={{ filter: isSelected ? 'drop-shadow(0 0 8px rgba(0,229,195,0.7))' : undefined }}
-        className="cursor-pointer transition-transform duration-150 hover:scale-110 active:scale-95"
-      >
+    <Marker latitude={place.lat} longitude={place.lng} anchor="bottom"
+      onClick={(e) => { e.originalEvent.stopPropagation(); onClick(); }}>
+      <div style={{ filter: isSelected ? 'drop-shadow(0 0 10px rgba(0,229,195,0.8))' : undefined }}
+        className="cursor-pointer transition-transform hover:scale-110 active:scale-95">
         <svg width="30" height="40" viewBox="0 0 30 40" fill="none">
           <path d="M15 0C6.716 0 0 6.716 0 15C0 23.284 15 40 15 40C15 40 30 23.284 30 15C30 6.716 23.284 0 15 0Z"
-            fill={color} fillOpacity={isSelected ? 1 : 0.88} />
+            fill={color} fillOpacity={0.9} />
           <text x="15" y="17" textAnchor="middle" dominantBaseline="middle" fontSize="12" fill="white">
             {meta.icon}
           </text>
@@ -57,86 +44,48 @@ function UserMarker({ lat, lng }: { lat: number; lng: number }) {
   return (
     <Marker latitude={lat} longitude={lng} anchor="center">
       <div className="relative">
-        <div className="w-4 h-4 rounded-full bg-teal border-2 border-white shadow-lg z-10 relative" />
+        <div className="w-5 h-5 rounded-full bg-teal border-2 border-white shadow-xl z-10 relative" />
         <div className="absolute inset-0 rounded-full bg-teal/40 animate-ping" />
+        <div className="absolute -inset-3 rounded-full bg-teal/10 animate-ping" style={{ animationDelay: '0.3s' }} />
       </div>
     </Marker>
   );
 }
 
-// ─── Detail Popup ─────────────────────────────────────────────────────────────
+// ─── Popup ────────────────────────────────────────────────────────────────────
 
 function PlacePopup({ place, userLat, userLng, onClose }: {
-  place: NearbyPlace;
-  userLat: number;
-  userLng: number;
-  onClose: () => void;
+  place: NearbyPlace; userLat: number; userLng: number; onClose: () => void;
 }) {
   const meta = PLACE_META[place.placeType];
-  const gmapsDir = `https://www.google.com/maps/dir/${userLat},${userLng}/${place.lat},${place.lng}`;
-  const gmapsSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}&query_place_id=${place.lat},${place.lng}`;
-
+  const dir = `https://www.google.com/maps/dir/${userLat},${userLng}/${place.lat},${place.lng}`;
   return (
-    <Popup
-      latitude={place.lat}
-      longitude={place.lng}
-      anchor="bottom"
-      offset={46}
-      onClose={onClose}
-      closeButton={false}
-      className="mv-popup"
-      maxWidth="300px"
-    >
-      <div className="bg-card border border-border-mid rounded-xl shadow-card p-4 min-w-[260px] max-w-[290px]">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="text-xs font-body px-2 py-0.5 rounded-full border"
-                style={{ color: meta.color, borderColor: `${meta.color}40`, background: `${meta.color}15` }}>
-                {meta.icon} {meta.label}
-              </span>
-              {place.emergencyAvailable && (
-                <span className="badge-coral text-xs">🚨 24h</span>
-              )}
-            </div>
+    <Popup latitude={place.lat} longitude={place.lng} anchor="bottom" offset={46}
+      onClose={onClose} closeButton={false} className="mv-popup" maxWidth="300px">
+      <div className="bg-card border border-border-mid rounded-xl p-4 min-w-[250px]">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div>
+            <span className="text-xs px-2 py-0.5 rounded-full border mb-1 inline-block font-body"
+              style={{ color: meta.color, borderColor: `${meta.color}40`, background: `${meta.color}15` }}>
+              {meta.icon} {meta.label}
+            </span>
             <h3 className="font-sans font-semibold text-sm text-text-primary leading-tight">{place.name}</h3>
           </div>
-          <button onClick={onClose} className="text-text-faint hover:text-text-primary text-lg leading-none flex-shrink-0">✕</button>
+          <button onClick={onClose} className="text-text-faint hover:text-text-primary text-base">✕</button>
         </div>
-
-        {/* Details */}
-        <div className="space-y-1.5 mb-3">
-          <p className="font-body text-xs text-text-muted flex gap-2">
-            <span>📍</span><span className="flex-1">{place.address}</span>
-          </p>
-          {place.phone && (
-            <p className="font-body text-xs text-text-muted flex gap-2">
-              <span>📞</span>
-              <a href={`tel:${place.phone}`} className="hover:text-teal transition-colors">{place.phone}</a>
-            </p>
-          )}
-          {place.openingHours && (
-            <p className="font-body text-xs text-text-muted flex gap-2">
-              <span>⏰</span><span className="flex-1">{place.openingHours}</span>
-            </p>
-          )}
-          <p className="font-mono text-xs text-teal">{place.distanceKm} km away</p>
+        <div className="space-y-1 mb-3 text-xs font-body text-text-muted">
+          <p className="flex gap-2"><span>📍</span><span>{place.address}</span></p>
+          {place.phone && <p className="flex gap-2"><span>📞</span>
+            <a href={`tel:${place.phone}`} className="hover:text-teal">{place.phone}</a></p>}
+          {place.openingHours && <p className="flex gap-2"><span>⏰</span><span>{place.openingHours}</span></p>}
+          <p className="font-mono text-teal font-semibold">{place.distanceKm} km away</p>
+          {place.emergencyAvailable && <span className="badge-coral">🚨 24h Emergency</span>}
         </div>
-
-        {/* Actions */}
         <div className="flex gap-2">
-          <a href={gmapsDir} target="_blank" rel="noreferrer"
-            className="btn-primary flex-1 text-center text-xs py-2">
-            🗺️ Directions
+          <a href={dir} target="_blank" rel="noreferrer" className="btn-primary flex-1 text-center text-xs py-2">
+            🗺️ Get Directions
           </a>
-          <a href={gmapsSearch} target="_blank" rel="noreferrer"
-            className="btn-ghost px-3 text-xs py-2" title="View on Maps">
-            🔍
-          </a>
-          {place.phone && (
-            <a href={`tel:${place.phone}`} className="btn-ghost px-3 text-xs py-2">📞</a>
-          )}
+          {place.phone && <a href={`tel:${place.phone}`} className="btn-ghost px-3 text-xs py-2">📞</a>}
         </div>
       </div>
     </Popup>
@@ -146,35 +95,24 @@ function PlacePopup({ place, userLat, userLng, onClose }: {
 // ─── List Card ────────────────────────────────────────────────────────────────
 
 function PlaceCard({ place, isSelected, onClick }: {
-  place: NearbyPlace;
-  isSelected: boolean;
-  onClick: () => void;
+  place: NearbyPlace; isSelected: boolean; onClick: () => void;
 }) {
   const meta = PLACE_META[place.placeType];
-
   return (
     <div onClick={onClick}
-      className={`mv-card cursor-pointer transition-all duration-150 animate-fade-in
-        ${isSelected ? 'border-teal/50 shadow-teal-glow' : ''}`}
-    >
+      className={`mv-card cursor-pointer transition-all duration-150 ${isSelected ? 'border-teal/50 shadow-teal-glow' : ''}`}>
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
-          style={{ background: `${meta.color}20` }}>
-          {meta.icon}
-        </div>
+          style={{ background: `${meta.color}20` }}>{meta.icon}</div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <span className="text-xs font-body px-1.5 py-0.5 rounded-full"
-              style={{ color: meta.color, background: `${meta.color}20` }}>
-              {meta.label}
-            </span>
-            {place.emergencyAvailable && (
-              <span className="badge-coral text-xs">🚨 24h</span>
-            )}
+          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+            <span className="text-xs px-1.5 py-0.5 rounded-full font-body"
+              style={{ color: meta.color, background: `${meta.color}20` }}>{meta.label}</span>
+            {place.emergencyAvailable && <span className="badge-coral text-xs">🚨</span>}
           </div>
-          <h3 className="font-sans font-medium text-sm text-text-primary leading-snug truncate">{place.name}</h3>
+          <p className="font-sans font-medium text-sm text-text-primary truncate">{place.name}</p>
           <p className="font-body text-xs text-text-muted truncate">{place.address}</p>
-          <div className="flex items-center gap-3 mt-1">
+          <div className="flex gap-3 mt-1">
             <span className="font-mono text-xs text-teal font-semibold">{place.distanceKm} km</span>
             {place.phone && <span className="font-mono text-xs text-text-faint">{place.phone}</span>}
           </div>
@@ -184,76 +122,92 @@ function PlaceCard({ place, isSelected, onClick }: {
   );
 }
 
-// ─── Status Banner ────────────────────────────────────────────────────────────
+// ─── Permission Gate ──────────────────────────────────────────────────────────
 
-function StatusBanner({ status, error, onRetry }: {
-  status: string;
-  error: string | null;
-  onRetry: () => void;
-}) {
-  if (status === 'granted') return null;
-
+function PermissionGate({ onAllow, onDeny }: { onAllow: () => void; onDeny: () => void }) {
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 text-sm font-body flex-shrink-0
-      ${status === 'denied' ? 'bg-coral/10 border-b border-coral/30 text-coral'
-      : status === 'requesting' ? 'bg-teal/10 border-b border-teal/20 text-teal'
-      : 'bg-amber/10 border-b border-amber/20 text-amber'}`}
-    >
-      {status === 'requesting' && (
-        <><span className="animate-spin">⏳</span> Getting your location…</>
-      )}
-      {status === 'denied' && (
-        <>
-          <span>⚠️</span>
-          <span className="flex-1">{error} · Showing demo data for Bandra, Mumbai</span>
-          <button onClick={onRetry} className="underline hover:no-underline flex-shrink-0">Retry</button>
-        </>
-      )}
-      {status === 'unavailable' && (
-        <><span>⚠️</span> Geolocation not available · Showing demo data</>
-      )}
-      {status === 'idle' && (
-        <><span>📍</span> Waiting for location…</>
-      )}
+    <div className="flex flex-col items-center justify-center h-screen bg-void px-6 text-center">
+      {/* Animated pulse rings */}
+      <div className="relative w-32 h-32 mb-10 flex items-center justify-center">
+        <div className="absolute w-32 h-32 rounded-full bg-teal/10 animate-ping" style={{ animationDuration: '2s' }} />
+        <div className="absolute w-24 h-24 rounded-full bg-teal/15 animate-ping" style={{ animationDuration: '2s', animationDelay: '0.4s' }} />
+        <div className="absolute w-16 h-16 rounded-full bg-teal/20 animate-ping" style={{ animationDuration: '2s', animationDelay: '0.8s' }} />
+        <div className="w-10 h-10 rounded-full bg-teal flex items-center justify-center text-2xl relative z-10 shadow-teal-glow">
+          📍
+        </div>
+      </div>
+
+      <h1 className="font-sans font-bold text-3xl text-text-primary mb-3">
+        Find Healthcare Near You
+      </h1>
+      <p className="font-body text-base text-text-muted max-w-sm mb-2 leading-relaxed">
+        MedVault will use your <span className="text-teal font-medium">live GPS location</span> to find
+        real hospitals, pharmacies, and clinics near you using OpenStreetMap data.
+      </p>
+      <p className="font-mono text-xs text-text-faint mb-10">
+        Your location is never stored or sent to our servers
+      </p>
+
+      {/* What we'll show */}
+      <div className="grid grid-cols-3 gap-4 mb-10 max-w-sm w-full">
+        {[
+          { icon: '🏥', label: 'Hospitals' },
+          { icon: '💊', label: 'Pharmacies' },
+          { icon: '🩺', label: 'Clinics' },
+          { icon: '👨‍⚕️', label: 'Doctors' },
+          { icon: '🦷', label: 'Dentists' },
+          { icon: '🔬', label: 'Labs' },
+        ].map(({ icon, label }) => (
+          <div key={label} className="mv-card text-center py-3 px-2">
+            <span className="text-2xl block mb-1">{icon}</span>
+            <span className="font-body text-xs text-text-muted">{label}</span>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={onAllow}
+        className="btn-primary text-base px-10 py-4 rounded-2xl shadow-teal-glow mb-4 hover:scale-105 active:scale-95 transition-transform"
+      >
+        📍 Allow Location & Find Nearby
+      </button>
+      <button
+        onClick={onDeny}
+        className="font-body text-sm text-text-faint hover:text-text-muted transition-colors"
+      >
+        No thanks, use demo data instead
+      </button>
     </div>
   );
 }
 
-// ─── Loading overlay ──────────────────────────────────────────────────────────
+// ─── Fetching Screen ──────────────────────────────────────────────────────────
 
-function LoadingOverlay({ message }: { message: string }) {
+function FetchingScreen({ message }: { message: string }) {
   return (
-    <div className="absolute inset-0 bg-void/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-10">
-      <div className="w-12 h-12 border-2 border-teal/30 border-t-teal rounded-full animate-spin" />
-      <p className="font-mono text-sm text-teal">{message}</p>
+    <div className="flex flex-col items-center justify-center h-screen bg-void gap-6">
+      <div className="relative w-20 h-20">
+        <div className="w-20 h-20 border-2 border-teal/20 border-t-teal rounded-full animate-spin" />
+        <div className="absolute inset-0 flex items-center justify-center text-2xl">📍</div>
+      </div>
+      <div className="text-center">
+        <p className="font-sans font-semibold text-text-primary text-lg mb-1">{message}</p>
+        <p className="font-mono text-xs text-text-faint">Please allow location access in your browser</p>
+      </div>
     </div>
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Main ────────────────────────────────────────────────────────────────────
 
-function toNearbyPlace(h: typeof MOCK_HOSPITALS[number]): NearbyPlace {
-  return {
-    id: h.id,
-    name: h.name,
-    placeType: h.type === 'diagnostic' ? 'laboratory' : h.type,
-    lat: h.lat,
-    lng: h.lng,
-    address: h.address,
-    phone: h.phone,
-    openingHours: h.timings,
-    emergencyAvailable: h.emergencyAvailable,
-    distanceKm: h.distanceKm,
-    tags: {},
-  };
-}
+type AppState = 'gate' | 'requesting' | 'fetching' | 'ready' | 'error';
 
 export default function Locator() {
-  const { location, status: geoStatus, error: geoError, request: requestGeo } = useGeolocation(true);
-
+  const [appState, setAppState] = useState<AppState>('gate');
+  const [userLat, setUserLat] = useState<number | null>(null);
+  const [userLng, setUserLng] = useState<number | null>(null);
   const [places, setPlaces] = useState<NearbyPlace[]>([]);
-  const [fetchStatus, setFetchStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState('');
   const [radius, setRadius] = useState(3000);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -263,275 +217,247 @@ export default function Locator() {
 
   const mapRef = useRef<any>(null);
 
-  const userLat = location?.lat ?? MOCK_USER_LOCATION.lat;
-  const userLng = location?.lng ?? MOCK_USER_LOCATION.lng;
-  const usingRealLocation = geoStatus === 'granted' && !!location;
-
-  // Fetch from Overpass when we have a location
   const doFetch = useCallback(async (lat: number, lng: number, r: number) => {
-    setFetchStatus('loading');
-    setFetchError(null);
+    setAppState('fetching');
     try {
       const results = await fetchNearbyPlaces(lat, lng, r);
-      if (results.length === 0) {
-        // OSM data can be sparse — fall back to mock + notify
-        setPlaces(MOCK_HOSPITALS.map(toNearbyPlace));
-        setFetchError('No OpenStreetMap data found in this area — showing demo data');
-      } else {
-        setPlaces(results);
-      }
-      setFetchStatus('done');
+      setPlaces(results);
+      setAppState('ready');
     } catch (e: any) {
-      console.warn('Overpass fetch failed:', e);
-      setPlaces(MOCK_HOSPITALS.map(toNearbyPlace));
-      setFetchError('Could not reach OpenStreetMap API — showing demo data');
-      setFetchStatus('error');
+      setErrorMsg('Could not fetch from OpenStreetMap. Please check your internet connection.');
+      setAppState('error');
     }
   }, []);
 
-  // Re-fetch when location becomes available or radius changes
-  useEffect(() => {
-    if (geoStatus === 'granted' && location) {
-      doFetch(location.lat, location.lng, radius);
-    } else if (geoStatus === 'denied' || geoStatus === 'unavailable') {
-      setPlaces(MOCK_HOSPITALS.map(toNearbyPlace));
-      setFetchStatus('done');
+  const requestLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setErrorMsg('Geolocation is not supported by your browser.');
+      setAppState('error');
+      return;
     }
-  }, [geoStatus, location, radius, doFetch]);
+    setAppState('requesting');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setUserLat(lat);
+        setUserLng(lng);
+        doFetch(lat, lng, radius);
+      },
+      (err) => {
+        const msg = err.code === 1
+          ? 'Location access was denied. Please allow location in your browser settings and try again.'
+          : 'Could not get your location. Please check your GPS or network.';
+        setErrorMsg(msg);
+        setAppState('error');
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  }, [doFetch, radius]);
 
-  // Fly map to user when location arrives
+  // Fly to user when map + location ready
   useEffect(() => {
-    if (location && mapRef.current) {
-      mapRef.current.flyTo({
-        center: [location.lng, location.lat],
-        zoom: 14,
-        duration: 1200,
-      });
+    if (appState === 'ready' && userLat && userLng && mapRef.current) {
+      mapRef.current.flyTo({ center: [userLng, userLat], zoom: 14, duration: 1000 });
     }
-  }, [location]);
+  }, [appState, userLat, userLng]);
 
   const selectedPlace = places.find((p) => p.id === selectedId) ?? null;
 
   const filtered = places.filter((p) => {
-    const matchSearch = !search
-      || p.name.toLowerCase().includes(search.toLowerCase())
-      || p.address.toLowerCase().includes(search.toLowerCase())
-      || p.placeType.includes(search.toLowerCase());
-    const matchType = activeTypes.size === 0 || activeTypes.has(p.placeType);
-    const matchEmergency = !emergencyOnly || p.emergencyAvailable;
-    return matchSearch && matchType && matchEmergency;
+    if (search && !p.name.toLowerCase().includes(search.toLowerCase()) &&
+        !p.address.toLowerCase().includes(search.toLowerCase()) &&
+        !p.placeType.includes(search.toLowerCase())) return false;
+    if (activeTypes.size > 0 && !activeTypes.has(p.placeType)) return false;
+    if (emergencyOnly && !p.emergencyAvailable) return false;
+    return true;
   });
 
-  const handleSelect = (place: NearbyPlace) => {
-    setSelectedId(place.id);
-    mapRef.current?.flyTo({ center: [place.lng, place.lat], zoom: 16, duration: 700 });
-  };
-
-  const toggleType = (t: PlaceType) => {
-    setActiveTypes((prev) => {
-      const next = new Set(prev);
-      next.has(t) ? next.delete(t) : next.add(t);
-      return next;
-    });
-  };
-
-  // Count by type for badges
   const typeCounts = ALL_TYPES.reduce((acc, t) => {
     acc[t] = places.filter((p) => p.placeType === t).length;
     return acc;
   }, {} as Record<PlaceType, number>);
 
+  // ── States: gate / requesting / fetching / error ──────────────────────────
+
+  if (appState === 'gate') {
+    return <PermissionGate onAllow={requestLocation} onDeny={() => {
+      // Load demo data (Panaji, Goa)
+      setUserLat(15.4909); setUserLng(73.8278);
+      doFetch(15.4909, 73.8278, radius);
+    }} />;
+  }
+
+  if (appState === 'requesting') {
+    return <FetchingScreen message="Getting your location…" />;
+  }
+
+  if (appState === 'fetching') {
+    return <FetchingScreen message="Finding nearby healthcare…" />;
+  }
+
+  if (appState === 'error') {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-void gap-6 px-6 text-center">
+        <span className="text-5xl">⚠️</span>
+        <div>
+          <h2 className="font-sans font-bold text-xl text-text-primary mb-2">Something went wrong</h2>
+          <p className="font-body text-sm text-text-muted max-w-sm">{errorMsg}</p>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={requestLocation} className="btn-primary px-6 py-3">
+            🔄 Try Again
+          </button>
+          <button onClick={() => { setUserLat(15.4909); setUserLng(73.8278); doFetch(15.4909, 73.8278, radius); }}
+            className="btn-ghost px-6 py-3">
+            Use Panaji, Goa Demo
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Ready: show full map ──────────────────────────────────────────────────
+
+  const lat = userLat!;
+  const lng = userLng!;
+
   return (
     <div className="flex flex-col h-screen">
-      {/* Geo status banner */}
-      <StatusBanner status={geoStatus} error={geoError} onRetry={requestGeo} />
-
-      {/* Soft fetch error banner */}
-      {fetchError && fetchStatus !== 'loading' && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-amber/10 border-b border-amber/20 text-amber text-xs font-body flex-shrink-0">
-          <span>⚠️</span>{fetchError}
-        </div>
-      )}
-
       {/* Top bar */}
-      <div className="flex items-center gap-4 px-6 py-3 border-b border-border-dim bg-surface/80 backdrop-blur-sm flex-shrink-0 flex-wrap gap-y-2">
+      <div className="flex items-center gap-4 px-5 py-3 border-b border-border-dim bg-surface/80 backdrop-blur-sm flex-shrink-0 flex-wrap gap-y-2">
         <div>
-          <h1 className="font-sans font-bold text-lg text-text-primary">Nearby Healthcare</h1>
+          <h1 className="font-sans font-bold text-lg text-text-primary flex items-center gap-2">
+            <span className="text-teal">📍</span> Nearby Healthcare
+          </h1>
           <p className="font-body text-xs text-text-muted">
-            {usingRealLocation
-              ? `📍 Your location · ${filtered.length} of ${places.length} places`
-              : `📍 Demo: Bandra, Mumbai · ${filtered.length} results`}
+            {lat.toFixed(4)}°N, {lng.toFixed(4)}°E · {filtered.length} of {places.length} places
           </p>
         </div>
 
-        {/* Radius selector */}
+        {/* Radius */}
         <div className="flex items-center gap-2 ml-auto">
           <span className="font-mono text-xs text-text-faint">Radius</span>
           {[1000, 2000, 3000, 5000].map((r) => (
-            <button key={r}
-              onClick={() => setRadius(r)}
+            <button key={r} onClick={() => { setRadius(r); doFetch(lat, lng, r); }}
               className={`px-2.5 py-1 rounded-full text-xs font-mono transition-all
-                ${radius === r ? 'bg-teal text-teal-text' : 'bg-surface border border-border-dim text-text-muted hover:border-teal/40'}`}
-            >
+                ${radius === r ? 'bg-teal text-teal-text' : 'bg-surface border border-border-dim text-text-muted hover:border-teal/40'}`}>
               {r >= 1000 ? `${r / 1000}km` : `${r}m`}
             </button>
           ))}
         </div>
 
-        {/* Emergency toggle */}
-        <button
-          onClick={() => setEmergencyOnly((v) => !v)}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-sans font-medium transition-all flex-shrink-0
-            ${emergencyOnly ? 'bg-coral text-coral-text' : 'bg-surface border border-border-mid text-text-muted hover:border-coral/40'}`}
-        >
-          🚨 {emergencyOnly ? '24h Only' : 'All'}
+        {/* Emergency */}
+        <button onClick={() => setEmergencyOnly((v) => !v)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-sans font-medium transition-all flex-shrink-0
+            ${emergencyOnly ? 'bg-coral text-coral-text' : 'bg-surface border border-border-mid text-text-muted hover:border-coral/40'}`}>
+          🚨 {emergencyOnly ? '24h Only' : 'All Types'}
         </button>
       </div>
 
-      {/* Main split */}
+      {/* Split */}
       <div className="flex flex-1 overflow-hidden">
-        {/* ── Sidebar ─────────────────────────────────────── */}
+        {/* Sidebar */}
         <div className="w-80 flex flex-col border-r border-border-dim bg-void flex-shrink-0">
           {/* Search */}
           <div className="px-4 py-3 border-b border-border-dim">
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-faint text-sm">🔍</span>
-              <input
-                className="mv-input pl-8 text-sm"
-                placeholder="Hospital, pharmacy, clinic…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-faint">🔍</span>
+              <input className="mv-input pl-9 text-sm" placeholder="Search name, type…"
+                value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
 
-          {/* Type filter */}
+          {/* Type chips */}
           <div className="px-4 py-3 border-b border-border-dim">
-            <p className="font-body text-xs text-text-faint uppercase tracking-wider mb-2">Type</p>
+            <p className="font-body text-xs text-text-faint uppercase tracking-wider mb-2">Filter by type</p>
             <div className="flex flex-wrap gap-1.5">
-              {ALL_TYPES.map((t) => {
+              {ALL_TYPES.filter((t) => typeCounts[t] > 0).map((t) => {
                 const meta = PLACE_META[t];
-                const count = typeCounts[t];
-                if (count === 0) return null;
                 return (
-                  <button key={t} onClick={() => toggleType(t)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-body transition-all flex items-center gap-1
-                      ${activeTypes.has(t) ? 'font-medium' : 'bg-surface border border-border-dim text-text-faint hover:border-border-mid'}`}
-                    style={activeTypes.has(t) ? {
-                      background: `${meta.color}25`, color: meta.color, borderColor: `${meta.color}50`, border: '1px solid'
-                    } : {}}
-                  >
-                    {meta.icon} {meta.label}
-                    <span className="opacity-60">({count})</span>
+                  <button key={t} onClick={() => setActiveTypes((prev) => {
+                    const next = new Set(prev);
+                    next.has(t) ? next.delete(t) : next.add(t);
+                    return next;
+                  })}
+                    className="px-2.5 py-1 rounded-full text-xs font-body transition-all flex items-center gap-1"
+                    style={activeTypes.has(t)
+                      ? { background: `${meta.color}25`, color: meta.color, border: `1px solid ${meta.color}60` }
+                      : { background: 'var(--color-surface)', color: 'var(--color-text-faint)', border: '1px solid var(--color-border-dim)' }
+                    }>
+                    {meta.icon} {meta.label} <span className="opacity-50">({typeCounts[t]})</span>
                   </button>
                 );
               })}
               {activeTypes.size > 0 && (
                 <button onClick={() => setActiveTypes(new Set())}
-                  className="text-xs text-text-faint hover:text-coral px-2 py-1 transition-colors">
-                  Clear ✕
-                </button>
+                  className="text-xs text-text-faint hover:text-coral transition-colors px-1">Clear ✕</button>
               )}
             </div>
           </div>
 
-          {/* Results list */}
+          {/* List */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {fetchStatus === 'loading' && (
-              <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <div className="w-8 h-8 border-2 border-teal/30 border-t-teal rounded-full animate-spin" />
-                <p className="font-mono text-xs text-teal">Searching nearby…</p>
-              </div>
-            )}
-            {fetchStatus !== 'loading' && filtered.length === 0 && (
-              <div className="text-center py-12">
-                <span className="text-3xl block mb-2">🔍</span>
-                <p className="font-body text-sm text-text-muted">No results — try adjusting filters or radius</p>
-              </div>
-            )}
-            {fetchStatus !== 'loading' && filtered.map((p) => (
-              <PlaceCard key={p.id} place={p} isSelected={selectedId === p.id} onClick={() => handleSelect(p)} />
-            ))}
+            {filtered.length === 0
+              ? <div className="text-center py-12"><span className="text-3xl">🔍</span>
+                  <p className="font-body text-sm text-text-muted mt-2">No results — adjust filters</p></div>
+              : filtered.map((p) => (
+                  <PlaceCard key={p.id} place={p} isSelected={selectedId === p.id}
+                    onClick={() => {
+                      setSelectedId(p.id);
+                      mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom: 16, duration: 700 });
+                    }} />
+                ))
+            }
           </div>
 
-          {/* Refresh button */}
-          {usingRealLocation && (
-            <div className="p-3 border-t border-border-dim">
-              <button
-                onClick={() => doFetch(userLat, userLng, radius)}
-                disabled={fetchStatus === 'loading'}
-                className="w-full btn-ghost text-sm disabled:opacity-50"
-              >
-                {fetchStatus === 'loading' ? '⏳ Refreshing…' : '🔄 Refresh nearby places'}
-              </button>
-            </div>
-          )}
+          {/* Re-locate */}
+          <div className="p-3 border-t border-border-dim">
+            <button onClick={requestLocation} className="w-full btn-ghost text-sm flex items-center justify-center gap-2">
+              <span className="text-teal">📍</span> Update My Location
+            </button>
+          </div>
         </div>
 
-        {/* ── Map ──────────────────────────────────────────── */}
+        {/* Map */}
         <div className="flex-1 relative">
-          {fetchStatus === 'loading' && <LoadingOverlay message="Loading nearby places from OpenStreetMap…" />}
-
-          <Map
-            ref={mapRef}
-            mapStyle={MAP_STYLE}
-            initialViewState={{ latitude: userLat, longitude: userLng, zoom: 14 }}
+          <Map ref={mapRef} mapStyle={MAP_STYLE}
+            initialViewState={{ latitude: lat, longitude: lng, zoom: 14 }}
             style={{ width: '100%', height: '100%' }}
             attributionControl={false}
-            onClick={() => setSelectedId(null)}
-          >
+            onClick={() => setSelectedId(null)}>
             <NavigationControl position="top-right" />
-            <GeolocateControl
-              position="top-right"
-              trackUserLocation
-              onGeolocate={(e) => {
-                // If the built-in GeolocateControl fires, re-fetch with its coords
-                doFetch(e.coords.latitude, e.coords.longitude, radius);
-              }}
-            />
 
-            {/* User dot */}
-            <UserMarker lat={userLat} lng={userLng} />
+            <UserMarker lat={lat} lng={lng} />
 
-            {/* Place markers */}
             {filtered.map((p) => (
-              <PlaceMarker key={p.id} place={p} isSelected={selectedId === p.id} onClick={() => handleSelect(p)} />
+              <PlaceMarker key={p.id} place={p} isSelected={selectedId === p.id}
+                onClick={() => {
+                  setSelectedId(p.id);
+                  mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom: 16, duration: 700 });
+                }} />
             ))}
 
-            {/* Popup */}
             {selectedPlace && (
-              <PlacePopup
-                place={selectedPlace}
-                userLat={userLat}
-                userLng={userLng}
-                onClose={() => setSelectedId(null)}
-              />
+              <PlacePopup place={selectedPlace} userLat={lat} userLng={lng} onClose={() => setSelectedId(null)} />
             )}
           </Map>
 
           {/* Legend */}
-          <div className="absolute bottom-4 left-4 flex flex-wrap gap-2 pointer-events-none max-w-sm">
-            {ALL_TYPES.filter((t) => typeCounts[t] > 0).map((t) => {
-              const meta = PLACE_META[t];
-              return (
-                <div key={t} className="bg-card/90 backdrop-blur-sm border border-border-dim rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: meta.color }} />
-                  <span className="font-mono text-xs text-text-muted">{meta.label}</span>
-                </div>
-              );
-            })}
-            <div className="bg-card/90 backdrop-blur-sm border border-border-dim rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-teal animate-pulse flex-shrink-0" />
-              <span className="font-mono text-xs text-text-muted">You</span>
-            </div>
+          <div className="absolute bottom-4 left-4 flex flex-wrap gap-2 pointer-events-none max-w-xs">
+            {ALL_TYPES.filter((t) => typeCounts[t] > 0).map((t) => (
+              <div key={t} className="bg-card/90 backdrop-blur-sm border border-border-dim rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ background: PLACE_META[t].color }} />
+                <span className="font-mono text-xs text-text-muted">{PLACE_META[t].label}</span>
+                <span className="font-mono text-xs text-text-faint">({typeCounts[t]})</span>
+              </div>
+            ))}
           </div>
 
-          {/* Data source badge */}
+          {/* Source */}
           <div className="absolute bottom-4 right-4 pointer-events-none">
             <div className="bg-card/90 backdrop-blur-sm border border-border-dim rounded-lg px-2.5 py-1.5">
-              <span className="font-mono text-xs text-text-faint">
-                {usingRealLocation ? '🌐 Live · OpenStreetMap' : '📋 Demo data'}
-              </span>
+              <span className="font-mono text-xs text-text-faint">🌐 Live · OpenStreetMap</span>
             </div>
           </div>
         </div>
