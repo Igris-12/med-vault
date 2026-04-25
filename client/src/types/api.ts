@@ -230,3 +230,28 @@ export interface ApiError {
 }
 
 export type ApiResponse<T> = ApiSuccess<T> | ApiError;
+
+// ─── Alerts & Insights ───────────────────────────────────────────────────────
+export type AlertCategory = 'abnormal' | 'sudden_change' | 'missing_test' | 'suggestion';
+export type AlertSeverity = 'critical' | 'warning' | 'info';
+
+export interface HealthAlert {
+  _id: string;
+  category: AlertCategory;
+  severity: AlertSeverity;
+  title: string;
+  description: string;
+  /** Plain-language action the user should take */
+  action?: string;
+  /** Which specialist to see, if a suggestion */
+  specialist?: string;
+  /** Related lab test name */
+  relatedTest?: string;
+  /** Related document ID */
+  relatedDocumentId?: string;
+  /** ISO date the alert was generated */
+  createdAt: string;
+  /** True if the user has dismissed this alert */
+  dismissed: boolean;
+}
+

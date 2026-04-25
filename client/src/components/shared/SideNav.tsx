@@ -1,64 +1,101 @@
 import { NavLink } from 'react-router-dom';
-import { useMode } from '../../context/ModeContext';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
+import {
+  LayoutDashboard, Activity, FolderOpen, Pill, MessageSquare,
+  Upload, Smartphone, Settings, HeartPulse, Bell, MapPin,
+} from 'lucide-react';
 
-const navItems = [
-  { to: '/app/dashboard', icon: '📊', label: 'Dashboard' },
-  { to: '/app/timeline', icon: '📈', label: 'Timeline' },
-  { to: '/app/records', icon: '📁', label: 'Records' },
-  { to: '/app/prescriptions', icon: '💊', label: 'Prescriptions' },
-  { to: '/app/chat', icon: '💬', label: 'AI Chat' },
-  { to: '/app/upload', icon: '⬆️', label: 'Upload' },
-  { to: '/app/emergency', icon: '🆘', label: 'Emergency' },
+const NAV_ITEMS = [
+  { to: '/app/dashboard',           icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/app/timeline',            icon: Activity,        label: 'Timeline' },
+  { to: '/app/records',             icon: FolderOpen,      label: 'Records' },
+  { to: '/app/prescriptions',       icon: Pill,            label: 'Prescriptions' },
+  { to: '/app/chat',                icon: MessageSquare,   label: 'AI Chat' },
+  { to: '/app/upload',              icon: Upload,          label: 'Upload' },
+  { to: '/app/alerts',              icon: Bell,            label: 'Alerts' },
+  { to: '/app/locator',             icon: MapPin,          label: 'Locator' },
+  { to: '/app/reminders/dashboard', icon: Smartphone,      label: 'WA Reminders' },
 ];
 
 export function SideNav() {
-  const { mode, setMode } = useMode();
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <nav className="fixed left-0 top-0 h-screen w-14 hover:w-52 bg-surface border-r border-border-dim
-                    transition-all duration-200 ease-out flex flex-col z-40 overflow-hidden group">
+    <motion.nav
+      className="fixed left-0 top-0 h-screen z-40 flex flex-col"
+      animate={{ width: expanded ? 220 : 64 }}
+      transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+      style={{ background: 'var(--dd-sidebar-bg)', overflow: 'hidden' }}
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+    >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-border-dim min-w-0">
-        <span className="text-2xl flex-shrink-0">⚕️</span>
-        <span className="font-sans font-bold text-teal opacity-0 group-hover:opacity-100
-                         transition-opacity duration-150 delay-75 whitespace-nowrap">
-          MedVault
-        </span>
+      <div className="flex items-center h-16 px-4 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: 'rgba(255,255,255,0.2)' }}>
+          <HeartPulse size={16} color="#fff" />
+        </div>
+        <AnimatePresence>
+          {expanded && (
+            <motion.span className="ml-3 font-bold text-base text-white whitespace-nowrap"
+              initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}>
+              MedVault
+            </motion.span>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Nav items */}
-      <div className="flex-1 flex flex-col gap-1 p-2 mt-2">
-        {navItems.map(({ to, icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              `nav-item min-w-0 ${isActive ? 'active' : ''}`
-            }
-          >
-            <span className="text-lg flex-shrink-0">{icon}</span>
-            <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-150
-                             delay-75 whitespace-nowrap text-sm font-body">
-              {label}
-            </span>
+      <div className="flex-1 flex flex-col gap-1 px-2 py-3 overflow-hidden">
+        {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
+          <NavLink key={to} to={to} title={!expanded ? label : undefined}>
+            {({ isActive }) => (
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                className={`side-nav-item ${isActive ? 'active' : ''}`}>
+                <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                  <Icon size={18} color={isActive ? '#fff' : 'rgba(255,255,255,0.65)'} />
+                </div>
+                <AnimatePresence>
+                  {expanded && (
+                    <motion.span
+                      className="text-sm font-medium whitespace-nowrap"
+                      style={{ color: isActive ? '#fff' : 'rgba(255,255,255,0.7)' }}
+                      initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}>
+                      {label}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )}
           </NavLink>
         ))}
       </div>
 
-      {/* Mode toggle at bottom */}
-      <div className="p-2 border-t border-border-dim">
-        <button
-          onClick={() => setMode(mode === 'patient' ? 'doctor' : 'patient')}
-          className="w-full nav-item justify-start min-w-0"
-          title={`Switch to ${mode === 'patient' ? 'Doctor' : 'Patient'} mode`}
-        >
-          <span className="text-lg flex-shrink-0">{mode === 'patient' ? '👤' : '🩺'}</span>
-          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-150
-                           delay-75 whitespace-nowrap text-sm font-body capitalize">
-            {mode} mode
-          </span>
-        </button>
+      {/* Settings */}
+      <div className="px-2 pb-4 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+        <NavLink to="/app/reminders/settings">
+          {({ isActive }) => (
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+              className={`side-nav-item ${isActive ? 'active' : ''}`}>
+              <Settings size={18} color={isActive ? '#fff' : 'rgba(255,255,255,0.65)'} />
+              <AnimatePresence>
+                {expanded && (
+                  <motion.span className="text-sm font-medium text-white/70 whitespace-nowrap"
+                    initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}>
+                    Settings
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </NavLink>
       </div>
-    </nav>
+    </motion.nav>
   );
 }

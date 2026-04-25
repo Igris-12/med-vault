@@ -16,6 +16,7 @@ import prescriptionsRoutes from './routes/prescriptions.js';
 import chatRoutes from './routes/chat.js';
 import emergencyRoutes from './routes/emergency.js';
 import usersRoutes from './routes/users.js';
+import whatsappRoutes from './routes/whatsapp.js';
 
 dotenv.config();
 
@@ -34,7 +35,7 @@ const corsOrigin = (origin: string | undefined, cb: (err: Error | null, ok?: boo
 
 export const io = new SocketIOServer(server, {
   cors: {
-    origin: corsOrigin,
+    origin: true, // Allow any origin for local dev ports
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -53,7 +54,7 @@ io.on('connection', (socket: any) => {
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: corsOrigin,
+  origin: true, // Allow any origin for local dev ports
   credentials: true,
 }));
 app.use(express.json({ limit: '5mb' }));
@@ -84,6 +85,7 @@ app.use('/api/prescriptions', prescriptionsRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
 app.use((_req, res) => {
@@ -97,7 +99,11 @@ app.use(errorHandler);
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
 const start = async () => {
-  await connectDB();
+  try {
+    await connectDB();
+  } catch (err) {
+    console.warn('\n⚠️  MongoDB unavailable — starting server without DB (mock/frontend mode)\n', err instanceof Error ? err.message : err);
+  }
   server.listen(PORT, () => {
     console.log(`\n🚀 MedVault server running on http://localhost:${PORT}`);
     console.log(`📡 Health check: http://localhost:${PORT}/api/health\n`);

@@ -11,6 +11,7 @@ export interface IUser {
   emergencyContacts: Array<{ name: string; phone: string; relationship: string }>;
   emergencyToken: string;
   modePreference: 'patient' | 'doctor';
+  whatsappPhone?: string;
   createdAt: Date;
 }
 
@@ -32,6 +33,7 @@ const UserSchema = new Schema<IUser>(
     ],
     emergencyToken: { type: String, required: true, unique: true },
     modePreference: { type: String, enum: ['patient', 'doctor'], default: 'patient' },
+    whatsappPhone: { type: String, sparse: true, index: true },
   },
   { timestamps: true }
 );

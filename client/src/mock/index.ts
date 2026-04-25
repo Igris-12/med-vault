@@ -9,6 +9,7 @@ export { MOCK_ANOMALIES } from './mockAnomalies';
 export { MOCK_CHAT_HISTORY, MOCK_SUGGESTED_QUESTIONS } from './mockChat';
 export { MOCK_DASHBOARD_SUMMARY } from './mockDashboard';
 export { MOCK_PRESCRIPTION_EXTRACTION } from './mockPrescriptionExtraction';
+export { MOCK_ALERTS } from './mockAlerts';
 
 // ─── Global mock flag ─────────────────────────────────────────────────────────
 // Set VITE_USE_MOCK=true in client/.env to use mock data everywhere.
