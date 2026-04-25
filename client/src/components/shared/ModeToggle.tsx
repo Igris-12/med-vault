@@ -4,27 +4,31 @@ export function ModeToggle() {
   const { mode, setMode } = useMode();
 
   return (
-    <div className="flex items-center gap-2 bg-surface border border-border-mid rounded-full p-1">
-      <button
-        onClick={() => setMode('patient')}
-        className={`px-4 py-1.5 rounded-full text-sm font-sans font-medium transition-all duration-200
-          ${mode === 'patient'
-            ? 'bg-teal text-teal-text shadow-sm'
-            : 'text-text-muted hover:text-text-primary'
-          }`}
-      >
-        Patient
-      </button>
-      <button
-        onClick={() => setMode('doctor')}
-        className={`px-4 py-1.5 rounded-full text-sm font-sans font-medium transition-all duration-200
-          ${mode === 'doctor'
-            ? 'bg-teal text-teal-text shadow-sm'
-            : 'text-text-muted hover:text-text-primary'
-          }`}
-      >
-        Doctor
-      </button>
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 4,
+      background: 'var(--dd-surface)', border: '1px solid var(--dd-border)',
+      borderRadius: 100, padding: 4,
+    }}>
+      {(['patient', 'doctor'] as const).map(m => (
+        <button key={m} onClick={() => setMode(m)}
+          style={{
+            padding: '6px 16px',
+            borderRadius: 100,
+            fontSize: 13,
+            fontWeight: 500,
+            fontFamily: 'Inter, system-ui, sans-serif',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            background: mode === m
+              ? `linear-gradient(135deg, var(--dd-accent), #7c3aed)`
+              : 'transparent',
+            color: mode === m ? '#ffffff' : 'var(--dd-text-muted)',
+            boxShadow: mode === m ? '0 2px 8px var(--dd-accent-dim)' : 'none',
+          }}>
+          {m.charAt(0).toUpperCase() + m.slice(1)}
+        </button>
+      ))}
     </div>
   );
 }
