@@ -4,6 +4,25 @@ import type { LineLayer, FillLayer } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { fetchNearbyPlaces, type NearbyPlace, type PlaceType } from '../services/overpassService';
 import { getRoute, formatDistance, formatDuration, createRadiusCircle, type RouteStep } from '../services/routeService';
+import { getDoctorsForHospital, type Doctor } from '../mock/mockDoctors';
+import { MOCK_USER } from '../mock';
+
+// ─── Suggestions derived from user health data ────────────────────────────────
+const USER_SUGGESTIONS = [
+  { specialty: 'Endocrinology', reason: 'HbA1c 7.9% — diabetes management', icon: '🔬', urgency: 'high' as const },
+  { specialty: 'Nephrology',    reason: 'Microalbuminuria + rising creatinine', icon: '💧', urgency: 'high' as const },
+  { specialty: 'Cardiology',   reason: 'Hypertension history + high LDL', icon: '❤️', urgency: 'medium' as const },
+  { specialty: 'Ophthalmology', reason: 'Annual diabetic retinopathy screening due', icon: '👁️', urgency: 'low' as const },
+];
+
+// ─── Recently visited helpers ─────────────────────────────────────────────────
+const VISITED_KEY = 'medvault_visited_hospitals';
+function loadVisited(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(VISITED_KEY) || '[]')); } catch { return new Set(); }
+}
+function saveVisited(ids: Set<string>) {
+  localStorage.setItem(VISITED_KEY, JSON.stringify([...ids]));
+}
 
 const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
@@ -20,19 +39,22 @@ const ALL_TYPES: PlaceType[] = ['hospital', 'clinic', 'pharmacy', 'doctor', 'den
 
 // ─── Markers ─────────────────────────────────────────────────────────────────
 
-function PlaceMarker({ place, isSelected, onClick }: {
-  place: NearbyPlace; isSelected: boolean; onClick: () => void;
+function PlaceMarker({ place, isSelected, isVisited, onClick }: {
+  place: NearbyPlace; isSelected: boolean; isVisited: boolean; onClick: () => void;
 }) {
   const meta = PLACE_META[place.placeType];
-  const color = isSelected ? '#00E5C3' : meta.color;
+  const color = isSelected ? '#00E5C3' : isVisited ? '#F5A623' : meta.color;
   return (
     <Marker latitude={place.lat} longitude={place.lng} anchor="bottom"
       onClick={(e) => { e.originalEvent.stopPropagation(); onClick(); }}>
-      <div style={{ filter: isSelected ? 'drop-shadow(0 0 10px rgba(0,229,195,0.8))' : undefined }}
+      <div style={{ filter: isSelected ? 'drop-shadow(0 0 10px rgba(0,229,195,0.8))' : isVisited ? 'drop-shadow(0 0 6px rgba(245,166,35,0.6))' : undefined }}
         className="cursor-pointer transition-transform hover:scale-110 active:scale-95">
         <svg width="30" height="40" viewBox="0 0 30 40" fill="none">
           <path d="M15 0C6.716 0 0 6.716 0 15C0 23.284 15 40 15 40C15 40 30 23.284 30 15C30 6.716 23.284 0 15 0Z"
             fill={color} fillOpacity={0.9} />
+          {isVisited && !isSelected && (
+            <circle cx="15" cy="15" r="12" fill="none" stroke="#F5A623" strokeWidth="1.5" strokeDasharray="3 2" />
+          )}
           <text x="15" y="17" textAnchor="middle" dominantBaseline="middle" fontSize="12" fill="white">
             {meta.icon}
           </text>
@@ -56,40 +78,109 @@ function UserMarker({ lat, lng }: { lat: number; lng: number }) {
 
 // ─── Popup ────────────────────────────────────────────────────────────────────
 
-function PlacePopup({ place, onRoute, onClose }: {
+// ─── Doctor Card ──────────────────────────────────────────────────────────────
+
+function DoctorCard({ doc }: { doc: Doctor }) {
+  const urgency = USER_SUGGESTIONS.find(s => s.specialty === doc.specialty);
+  return (
+    <div className="px-4 py-3 border-b border-border-dim hover:bg-surface/40 transition-colors">
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-full bg-teal/15 flex items-center justify-center font-bold text-teal text-sm flex-shrink-0">
+          {doc.name.split(' ').slice(-1)[0].charAt(0)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-sans font-semibold text-sm text-text-primary">{doc.name}</p>
+            {urgency && <span className="text-xs px-1.5 py-0.5 rounded-full bg-coral/15 text-coral font-body">Recommended</span>}
+          </div>
+          <p className="font-body text-xs text-text-muted">{doc.specialty} · {doc.experienceYears}y exp</p>
+          <p className="font-body text-xs text-text-faint">{doc.qualification}</p>
+          <div className="flex items-center gap-3 mt-1.5">
+            <span className="font-mono text-xs text-amber">★ {doc.rating} <span className="text-text-faint">({doc.reviewCount})</span></span>
+            <span className="font-mono text-xs text-teal">₹{doc.consultationFee}</span>
+            <span className="font-body text-xs text-text-faint">{doc.nextAvailable}</span>
+          </div>
+        </div>
+      </div>
+      <div className="mt-2 flex items-center justify-between">
+        <span className="font-mono text-xs text-text-faint">{doc.source}</span>
+        <span className="font-body text-xs text-text-faint">{doc.languages.join(' · ')}</span>
+      </div>
+    </div>
+  );
+}
+
+function PlacePopup({ place, onRoute, onClose, isVisited }: {
   place: NearbyPlace;
   onRoute: () => void;
   onClose: () => void;
+  isVisited: boolean;
 }) {
+  const [tab, setTab] = useState<'info' | 'doctors'>('info');
   const meta = PLACE_META[place.placeType];
+  const doctors = getDoctorsForHospital(place.id);
+
   return (
     <Popup latitude={place.lat} longitude={place.lng} anchor="bottom" offset={46}
-      onClose={onClose} closeButton={false} className="mv-popup" maxWidth="300px">
-      <div className="bg-card border border-border-mid rounded-xl p-4 min-w-[250px]">
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <div>
-            <span className="text-xs px-2 py-0.5 rounded-full border mb-1 inline-block font-body"
-              style={{ color: meta.color, borderColor: `${meta.color}40`, background: `${meta.color}15` }}>
-              {meta.icon} {meta.label}
-            </span>
-            <h3 className="font-sans font-semibold text-sm text-text-primary leading-tight">{place.name}</h3>
+      onClose={onClose} closeButton={false} className="mv-popup" maxWidth="320px">
+      <div className="bg-card border border-border-mid rounded-xl overflow-hidden min-w-[290px]">
+        {/* Header */}
+        <div className="p-4 pb-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                <span className="text-xs px-2 py-0.5 rounded-full border font-body"
+                  style={{ color: meta.color, borderColor: `${meta.color}40`, background: `${meta.color}15` }}>
+                  {meta.icon} {meta.label}
+                </span>
+                {place.emergencyAvailable && <span className="badge-coral text-xs">🚨 24h</span>}
+                {isVisited && <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber/20 text-amber font-body">⭐ Visited</span>}
+              </div>
+              <h3 className="font-sans font-semibold text-sm text-text-primary leading-tight">{place.name}</h3>
+            </div>
+            <button onClick={onClose} className="text-text-faint hover:text-text-primary text-base flex-shrink-0">✕</button>
           </div>
-          <button onClick={onClose} className="text-text-faint hover:text-text-primary text-base">✕</button>
+
+          {/* Tabs */}
+          <div className="flex gap-1 mt-3 border-b border-border-dim">
+            {(['info', 'doctors'] as const).map((t) => (
+              <button key={t} onClick={() => setTab(t)}
+                className={`px-3 py-1.5 text-xs font-sans font-medium capitalize transition-all border-b-2 -mb-px
+                  ${tab === t ? 'border-teal text-teal' : 'border-transparent text-text-faint hover:text-text-muted'}`}>
+                {t === 'doctors' ? `👨‍⚕️ Doctors${doctors.length > 0 ? ` (${doctors.length})` : ''}` : '📋 Info'}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="space-y-1 mb-3 text-xs font-body text-text-muted">
-          <p className="flex gap-2"><span>📍</span><span>{place.address}</span></p>
-          {place.phone && <p className="flex gap-2"><span>📞</span>
-            <a href={`tel:${place.phone}`} className="hover:text-teal">{place.phone}</a></p>}
-          {place.openingHours && <p className="flex gap-2"><span>⏰</span><span>{place.openingHours}</span></p>}
-          <p className="font-mono text-teal font-semibold">{place.distanceKm} km away</p>
-          {place.emergencyAvailable && <span className="badge-coral">🚨 24h Emergency</span>}
-        </div>
-        <div className="flex gap-2">
-          <button onClick={onRoute} className="btn-primary flex-1 text-xs py-2">
-            🗺️ Get Directions
-          </button>
-          {place.phone && <a href={`tel:${place.phone}`} className="btn-ghost px-3 text-xs py-2">📞</a>}
-        </div>
+
+        {/* Tab content */}
+        {tab === 'info' && (
+          <div className="px-4 pb-4">
+            <div className="space-y-1 mb-3 text-xs font-body text-text-muted">
+              <p className="flex gap-2"><span>📍</span><span>{place.address}</span></p>
+              {place.phone && <p className="flex gap-2"><span>📞</span>
+                <a href={`tel:${place.phone}`} className="hover:text-teal">{place.phone}</a></p>}
+              {place.openingHours && <p className="flex gap-2"><span>⏰</span><span>{place.openingHours}</span></p>}
+              <p className="font-mono text-teal font-semibold">{place.distanceKm} km away</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={onRoute} className="btn-primary flex-1 text-xs py-2">🗺️ Get Directions</button>
+              {place.phone && <a href={`tel:${place.phone}`} className="btn-ghost px-3 text-xs py-2">📞</a>}
+            </div>
+          </div>
+        )}
+
+        {tab === 'doctors' && (
+          <div className="max-h-64 overflow-y-auto">
+            {doctors.length === 0
+              ? <p className="text-center py-6 font-body text-sm text-text-faint px-4">No doctor data available for this facility</p>
+              : doctors.map((d) => <DoctorCard key={d.id} doc={d} />)
+            }
+            <p className="text-xs text-text-faint font-mono text-center py-2 border-t border-border-dim">
+              Sources: {[...new Set(doctors.map(d => d.source))].join(' · ')}
+            </p>
+          </div>
+        )}
       </div>
     </Popup>
   );
@@ -217,6 +308,7 @@ export default function Locator() {
   const [search, setSearch] = useState('');
   const [activeTypes, setActiveTypes] = useState<Set<PlaceType>>(new Set());
   const [emergencyOnly, setEmergencyOnly] = useState(false);
+  const [visited, setVisited] = useState<Set<string>>(loadVisited);
 
   // Routing state
   const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.LineString | null>(null);
@@ -273,6 +365,8 @@ export default function Locator() {
 
   // Route handler — OSRM, drawn on map
   const handleRoute = useCallback(async (place: NearbyPlace, uLat: number, uLng: number) => {
+    // Mark as visited
+    setVisited((prev) => { const next = new Set(prev); next.add(place.id); saveVisited(next); return next; });
     setRouteLoading(true);
     setRouteGeoJSON(null);
     setRouteInfo(null);
@@ -393,7 +487,41 @@ export default function Locator() {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         <div className="w-80 flex flex-col border-r border-border-dim bg-void flex-shrink-0">
-          {/* Search */}
+          {/* Suggestions based on user health data */}
+          {!routeInfo && !routeLoading && (
+            <div className="px-4 py-3 border-b border-border-dim bg-coral/5">
+              <p className="font-sans text-xs font-semibold text-coral uppercase tracking-wider mb-2">💡 Recommended for You</p>
+              <div className="space-y-1.5">
+                {USER_SUGGESTIONS.map((s) => {
+                  const match = places.find(p =>
+                    p.tags?.['healthcare:speciality']?.toLowerCase().includes(s.specialty.toLowerCase()) ||
+                    p.name.toLowerCase().includes(s.specialty.toLowerCase())
+                  );
+                  return (
+                    <div key={s.specialty} className="flex items-start gap-2">
+                      <span className="text-base flex-shrink-0">{s.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-body text-xs font-medium text-text-primary">{s.specialty}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-mono ${
+                            s.urgency === 'high' ? 'bg-coral/15 text-coral' :
+                            s.urgency === 'medium' ? 'bg-amber/15 text-amber' : 'bg-teal/15 text-teal'
+                          }`}>{s.urgency}</span>
+                        </div>
+                        <p className="font-body text-xs text-text-faint truncate">{s.reason}</p>
+                      </div>
+                      {match && (
+                        <button onClick={() => { setSelectedId(match.id); mapRef.current?.flyTo({ center: [match.lng, match.lat], zoom: 16, duration: 700 }); }}
+                          className="text-xs text-teal hover:underline flex-shrink-0">View →</button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Search */}}
           <div className="px-4 py-3 border-b border-border-dim">
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-faint">🔍</span>
@@ -519,18 +647,27 @@ export default function Locator() {
             onClick={() => { setSelectedId(null); }}>
             <NavigationControl position="top-right" />
 
-            {/* Radius circle — visible ring showing search area */}
-            <Source id="radius" type="geojson" data={createRadiusCircle(lng, lat, radius)}>
+            {/* Radius circle — clearly visible search boundary */}
+            <Source id="radius-fill-src" type="geojson" data={createRadiusCircle(lng, lat, radius)}>
+              {/* Semi-transparent fill */}
               <Layer id="radius-fill" type="fill" paint={{
                 'fill-color': '#00E5C3',
-                'fill-opacity': 0.08,
+                'fill-opacity': 0.06,
               }} />
-              <Layer id="radius-stroke" type="line" paint={{
+              {/* Bold outer stroke */}
+              <Layer id="radius-stroke-outer" type="line" paint={{
+                'fill-color': '#00E5C3',
                 'line-color': '#00E5C3',
-                'line-width': 2.5,
-                'line-opacity': 0.7,
-                'line-dasharray': [6, 3],
-              }} />
+                'line-width': 4,
+                'line-opacity': 0.85,
+              }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
+              {/* Subtle glow halo */}
+              <Layer id="radius-stroke-glow" type="line" paint={{
+                'line-color': '#00E5C3',
+                'line-width': 12,
+                'line-opacity': 0.08,
+                'line-blur': 4,
+              }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} />
             </Source>
 
             {/* Route line */}
@@ -552,9 +689,10 @@ export default function Locator() {
             <UserMarker lat={lat} lng={lng} />
 
             {filtered.map((p) => (
-              <PlaceMarker key={p.id} place={p} isSelected={selectedId === p.id}
+              <PlaceMarker key={p.id} place={p} isSelected={selectedId === p.id} isVisited={visited.has(p.id)}
                 onClick={() => {
                   setSelectedId(p.id);
+                  setVisited((prev) => { const next = new Set(prev); next.add(p.id); saveVisited(next); return next; });
                   setRouteGeoJSON(null); setRouteInfo(null);
                   mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom: 16, duration: 700 });
                 }} />
@@ -563,6 +701,7 @@ export default function Locator() {
             {selectedPlace && (
               <PlacePopup
                 place={selectedPlace}
+                isVisited={visited.has(selectedPlace.id)}
                 onRoute={() => handleRoute(selectedPlace, lat, lng)}
                 onClose={() => setSelectedId(null)}
               />
