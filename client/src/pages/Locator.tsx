@@ -7,15 +7,15 @@ import { getRoute, formatDistance, formatDuration, createRadiusCircle, type Rout
 import { getDoctorsForHospital, type Doctor } from '../mock/mockDoctors';
 
 
-// ─── Suggestions derived from user health data ────────────────────────────────
+// --- Suggestions derived from user health data --------------------------------
 const USER_SUGGESTIONS = [
-  { specialty: 'Endocrinology', reason: 'HbA1c 7.9% — diabetes management', icon: '🔬', urgency: 'high' as const },
+  { specialty: 'Endocrinology', reason: 'HbA1c 7.9% -- diabetes management', icon: '🔬', urgency: 'high' as const },
   { specialty: 'Nephrology',    reason: 'Microalbuminuria + rising creatinine', icon: '💧', urgency: 'high' as const },
-  { specialty: 'Cardiology',   reason: 'Hypertension history + high LDL', icon: '❤️', urgency: 'medium' as const },
-  { specialty: 'Ophthalmology', reason: 'Annual diabetic retinopathy screening due', icon: '👁️', urgency: 'low' as const },
+  { specialty: 'Cardiology',   reason: 'Hypertension history + high LDL', icon: '&hearts;', urgency: 'medium' as const },
+  { specialty: 'Ophthalmology', reason: 'Annual diabetic retinopathy screening due', icon: '👁', urgency: 'low' as const },
 ];
 
-// ─── Recently visited helpers ─────────────────────────────────────────────────
+// --- Recently visited helpers -------------------------------------------------
 const VISITED_KEY = 'medvault_visited_hospitals';
 function loadVisited(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem(VISITED_KEY) || '[]')); } catch { return new Set(); }
@@ -30,14 +30,14 @@ const PLACE_META: Record<PlaceType, { icon: string; label: string; color: string
   hospital:   { icon: '🏥', label: 'Hospital',   color: '#FF4A6E' },
   clinic:     { icon: '🩺', label: 'Clinic',     color: '#00E5C3' },
   pharmacy:   { icon: '💊', label: 'Pharmacy',   color: '#A78BFA' },
-  doctor:     { icon: '👨‍⚕️', label: 'Doctor',   color: '#F5A623' },
+  doctor:     { icon: '👨+', label: 'Doctor',   color: '#F5A623' },
   dentist:    { icon: '🦷', label: 'Dentist',    color: '#60A5FA' },
   laboratory: { icon: '🔬', label: 'Laboratory', color: '#34D399' },
 };
 
 const ALL_TYPES: PlaceType[] = ['hospital', 'clinic', 'pharmacy', 'doctor', 'dentist', 'laboratory'];
 
-// ─── Markers ─────────────────────────────────────────────────────────────────
+// --- Markers -----------------------------------------------------------------
 
 function PlaceMarker({ place, isSelected, isVisited, onClick }: {
   place: NearbyPlace; isSelected: boolean; isVisited: boolean; onClick: () => void;
@@ -76,9 +76,9 @@ function UserMarker({ lat, lng }: { lat: number; lng: number }) {
   );
 }
 
-// ─── Popup ────────────────────────────────────────────────────────────────────
+// --- Popup --------------------------------------------------------------------
 
-// ─── Doctor Card ──────────────────────────────────────────────────────────────
+// --- Doctor Card --------------------------------------------------------------
 
 function DoctorCard({ doc }: { doc: Doctor }) {
   const urgency = USER_SUGGESTIONS.find(s => s.specialty === doc.specialty);
@@ -96,8 +96,8 @@ function DoctorCard({ doc }: { doc: Doctor }) {
           <p className="font-body text-xs text-text-muted">{doc.specialty} &middot; {doc.experienceYears}y exp</p>
           <p className="font-body text-xs text-text-faint">{doc.qualification}</p>
           <div className="flex items-center gap-3 mt-1.5">
-            <span className="font-mono text-xs text-amber">★ {doc.rating} <span className="text-text-faint">({doc.reviewCount})</span></span>
-            <span className="font-mono text-xs text-teal">₹{doc.consultationFee}</span>
+            <span className="font-mono text-xs text-amber">* {doc.rating} <span className="text-text-faint">({doc.reviewCount})</span></span>
+            <span className="font-mono text-xs text-teal">Rs.{doc.consultationFee}</span>
             <span className="font-body text-xs text-text-faint">{doc.nextAvailable}</span>
           </div>
         </div>
@@ -134,11 +134,11 @@ function PlacePopup({ place, onRoute, onClose, isVisited }: {
                   {meta.icon} {meta.label}
                 </span>
                 {place.emergencyAvailable && <span className="badge-coral text-xs">🚨 24h</span>}
-                {isVisited && <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber/20 text-amber font-body">⭐ Visited</span>}
+                {isVisited && <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber/20 text-amber font-body">* Visited</span>}
               </div>
               <h3 className="font-sans font-semibold text-sm text-text-primary leading-tight">{place.name}</h3>
             </div>
-            <button onClick={onClose} className="text-text-faint hover:text-text-primary text-base flex-shrink-0">✕</button>
+            <button onClick={onClose} className="text-text-faint hover:text-text-primary text-base flex-shrink-0">x</button>
           </div>
 
           {/* Tabs */}
@@ -147,7 +147,7 @@ function PlacePopup({ place, onRoute, onClose, isVisited }: {
               <button key={t} onClick={() => setTab(t)}
                 className={`px-3 py-1.5 text-xs font-sans font-medium capitalize transition-all border-b-2 -mb-px
                   ${tab === t ? 'border-teal text-teal' : 'border-transparent text-text-faint hover:text-text-muted'}`}>
-                {t === 'doctors' ? `👨‍⚕️ Doctors${doctors.length > 0 ? ` (${doctors.length})` : ''}` : '📋 Info'}
+                {t === 'doctors' ? `👨+ Doctors${doctors.length > 0 ? ` (${doctors.length})` : ''}` : '📋 Info'}
               </button>
             ))}
           </div>
@@ -160,11 +160,11 @@ function PlacePopup({ place, onRoute, onClose, isVisited }: {
               <p className="flex gap-2"><span>📍</span><span>{place.address}</span></p>
               {place.phone && <p className="flex gap-2"><span>📞</span>
                 <a href={`tel:${place.phone}`} className="hover:text-teal">{place.phone}</a></p>}
-              {place.openingHours && <p className="flex gap-2"><span>⏰</span><span>{place.openingHours}</span></p>}
+              {place.openingHours && <p className="flex gap-2"><span></span><span>{place.openingHours}</span></p>}
               <p className="font-mono text-teal font-semibold">{place.distanceKm} km away</p>
             </div>
             <div className="flex gap-2">
-              <button onClick={onRoute} className="btn-primary flex-1 text-xs py-2">🗺️ Get Directions</button>
+              <button onClick={onRoute} className="btn-primary flex-1 text-xs py-2">🗺 Get Directions</button>
               {place.phone && <a href={`tel:${place.phone}`} className="btn-ghost px-3 text-xs py-2">📞</a>}
             </div>
           </div>
@@ -186,7 +186,7 @@ function PlacePopup({ place, onRoute, onClose, isVisited }: {
   );
 }
 
-// ─── List Card ────────────────────────────────────────────────────────────────
+// --- List Card ----------------------------------------------------------------
 
 function PlaceCard({ place, isSelected, isVisited, onClick }: {
   place: NearbyPlace; isSelected: boolean; isVisited: boolean; onClick: () => void;
@@ -203,7 +203,7 @@ function PlaceCard({ place, isSelected, isVisited, onClick }: {
             <span className="text-xs px-1.5 py-0.5 rounded-full font-body"
               style={{ color: meta.color, background: `${meta.color}20` }}>{meta.label}</span>
             {place.emergencyAvailable && <span className="badge-coral text-xs">🚨</span>}
-            {isVisited && <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber/20 text-amber font-body">⭐ Visited</span>}
+            {isVisited && <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber/20 text-amber font-body">* Visited</span>}
           </div>
           <p className="font-sans font-medium text-sm text-text-primary truncate">{place.name}</p>
           <p className="font-body text-xs text-text-muted truncate">{place.address}</p>
@@ -217,7 +217,7 @@ function PlaceCard({ place, isSelected, isVisited, onClick }: {
   );
 }
 
-// ─── Permission Gate ──────────────────────────────────────────────────────────
+// --- Permission Gate ----------------------------------------------------------
 
 function PermissionGate({ onAllow, onDeny }: { onAllow: () => void; onDeny: () => void }) {
   return (
@@ -249,7 +249,7 @@ function PermissionGate({ onAllow, onDeny }: { onAllow: () => void; onDeny: () =
           { icon: '🏥', label: 'Hospitals' },
           { icon: '💊', label: 'Pharmacies' },
           { icon: '🩺', label: 'Clinics' },
-          { icon: '👨‍⚕️', label: 'Doctors' },
+          { icon: '👨+', label: 'Doctors' },
           { icon: '🦷', label: 'Dentists' },
           { icon: '🔬', label: 'Labs' },
         ].map(({ icon, label }) => (
@@ -276,7 +276,7 @@ function PermissionGate({ onAllow, onDeny }: { onAllow: () => void; onDeny: () =
   );
 }
 
-// ─── Fetching Screen ──────────────────────────────────────────────────────────
+// --- Fetching Screen ----------------------------------------------------------
 
 function FetchingScreen({ message }: { message: string }) {
   return (
@@ -293,7 +293,7 @@ function FetchingScreen({ message }: { message: string }) {
   );
 }
 
-// ─── Main ────────────────────────────────────────────────────────────────────
+// --- Main --------------------------------------------------------------------
 
 type AppState = 'gate' | 'requesting' | 'fetching' | 'ready' | 'error';
 
@@ -364,7 +364,7 @@ export default function Locator() {
     }
   }, [appState, userLat, userLng]);
 
-  // Route handler — OSRM, drawn on map
+  // Route handler -- OSRM, drawn on map
   const handleRoute = useCallback(async (place: NearbyPlace, uLat: number, uLng: number) => {
     // Mark as visited
     setVisited((prev) => { const next = new Set(prev); next.add(place.id); saveVisited(next); return next; });
@@ -385,7 +385,7 @@ export default function Locator() {
         { padding: 60, duration: 800 }
       );
     } catch {
-      setRouteInfo({ distance: '—', duration: 'Route unavailable', dest: place.name });
+      setRouteInfo({ distance: '--', duration: 'Route unavailable', dest: place.name });
     } finally {
       setRouteLoading(false);
     }
@@ -407,7 +407,7 @@ export default function Locator() {
     return acc;
   }, {} as Record<PlaceType, number>);
 
-  // ── States: gate / requesting / fetching / error ──────────────────────────
+  // -- States: gate / requesting / fetching / error --------------------------
 
   if (appState === 'gate') {
     return <PermissionGate onAllow={requestLocation} onDeny={() => {
@@ -418,17 +418,17 @@ export default function Locator() {
   }
 
   if (appState === 'requesting') {
-    return <FetchingScreen message="Getting your location…" />;
+    return <FetchingScreen message="Getting your location..." />;
   }
 
   if (appState === 'fetching') {
-    return <FetchingScreen message="Finding nearby healthcare…" />;
+    return <FetchingScreen message="Finding nearby healthcare..." />;
   }
 
   if (appState === 'error') {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-void gap-6 px-6 text-center">
-        <span className="text-5xl">⚠️</span>
+        <span className="text-5xl">!</span>
         <div>
           <h2 className="font-sans font-bold text-xl text-text-primary mb-2">Something went wrong</h2>
           <p className="font-body text-sm text-text-muted max-w-sm">{errorMsg}</p>
@@ -446,7 +446,7 @@ export default function Locator() {
     );
   }
 
-  // ── Ready: show full map ──────────────────────────────────────────────────
+  // -- Ready: show full map --------------------------------------------------
 
   const lat = userLat!;
   const lng = userLng!;
@@ -460,7 +460,7 @@ export default function Locator() {
             <span className="text-teal">📍</span> Nearby Healthcare
           </h1>
           <p className="font-body text-xs text-text-muted">
-            {lat.toFixed(4)}°N, {lng.toFixed(4)}°E · {filtered.length} of {places.length} places
+            {lat.toFixed(4)}N, {lng.toFixed(4)}E &mdash; {filtered.length} of {places.length} places
           </p>
         </div>
 
@@ -513,7 +513,7 @@ export default function Locator() {
                       </div>
                       {match && (
                         <button onClick={() => { setSelectedId(match.id); mapRef.current?.flyTo({ center: [match.lng, match.lat], zoom: 16, duration: 700 }); }}
-                          className="text-xs text-teal hover:underline flex-shrink-0">View →</button>
+                          className="text-xs text-teal hover:underline flex-shrink-0">View &rarr;</button>
                       )}
                     </div>
                   );
@@ -526,7 +526,7 @@ export default function Locator() {
           <div className="px-4 py-3 border-b border-border-dim">
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-faint">🔍</span>
-              <input className="mv-input pl-9 text-sm" placeholder="Search name, type…"
+              <input className="mv-input pl-9 text-sm" placeholder="Search name, type..."
                 value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
@@ -554,7 +554,7 @@ export default function Locator() {
               })}
               {activeTypes.size > 0 && (
                 <button onClick={() => setActiveTypes(new Set())}
-                  className="text-xs text-text-faint hover:text-coral transition-colors px-1">Clear ✕</button>
+                  className="text-xs text-text-faint hover:text-coral transition-colors px-1">Clear x</button>
               )}
             </div>
           </div>
@@ -562,18 +562,18 @@ export default function Locator() {
           {/* List OR Directions panel */}
           <div className="flex-1 overflow-y-auto">
             {routeInfo || routeLoading ? (
-              /* ── Directions Panel ── */
+              /* -- Directions Panel -- */
               <div className="flex flex-col h-full">
                 {/* Header */}
                 <div className="px-4 py-3 border-b border-border-dim bg-teal/5">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-sans font-semibold text-sm text-teal">🗺️ Directions</span>
+                    <span className="font-sans font-semibold text-sm text-teal">🗺 Directions</span>
                     <button onClick={() => { setRouteGeoJSON(null); setRouteInfo(null); setRouteSteps([]); }}
-                      className="text-xs text-text-faint hover:text-coral transition-colors">✕ Clear</button>
+                      className="text-xs text-text-faint hover:text-coral transition-colors">x Clear</button>
                   </div>
                   {routeInfo && (
                     <div>
-                      <p className="font-sans text-xs font-medium text-text-primary truncate">→ {routeInfo.dest}</p>
+                      <p className="font-sans text-xs font-medium text-text-primary truncate">&rarr; {routeInfo.dest}</p>
                       <div className="flex gap-3 mt-1">
                         <span className="font-mono text-sm font-bold text-teal">{routeInfo.distance}</span>
                         <span className="font-mono text-sm text-text-muted">{routeInfo.duration}</span>
@@ -584,7 +584,7 @@ export default function Locator() {
                   {routeLoading && (
                     <div className="flex items-center gap-2 mt-1">
                       <div className="w-3 h-3 border-2 border-teal/30 border-t-teal rounded-full animate-spin" />
-                      <span className="font-mono text-xs text-teal">Calculating route…</span>
+                      <span className="font-mono text-xs text-teal">Calculating route...</span>
                     </div>
                   )}
                 </div>
@@ -614,11 +614,11 @@ export default function Locator() {
                 </div>
               </div>
             ) : (
-              /* ── Place List ── */
+              /* -- Place List -- */
               <div className="p-3 space-y-2">
                 {filtered.length === 0
                   ? <div className="text-center py-12"><span className="text-3xl">🔍</span>
-                      <p className="font-body text-sm text-text-muted mt-2">No results — adjust filters</p></div>
+                      <p className="font-body text-sm text-text-muted mt-2">No results -- adjust filters</p></div>
                   : filtered.map((p) => (
                       <PlaceCard key={p.id} place={p} isSelected={selectedId === p.id} isVisited={visited.has(p.id)}
                         onClick={() => {
@@ -649,7 +649,7 @@ export default function Locator() {
             onClick={() => { setSelectedId(null); }}>
             <NavigationControl position="top-right" />
 
-            {/* Radius circle — clearly visible search boundary */}
+            {/* Radius circle -- clearly visible search boundary */}
             <Source id="radius-fill-src" type="geojson" data={createRadiusCircle(lng, lat, radius)}>
               {/* Semi-transparent fill */}
               <Layer id="radius-fill" type="fill" paint={{
@@ -718,7 +718,7 @@ export default function Locator() {
             </div>
           </div>
 
-          {/* Route info card removed — now shown in sidebar */}
+          {/* Route info card removed -- now shown in sidebar */}
         </div>
 
           {/* Legend */}
@@ -735,7 +735,7 @@ export default function Locator() {
           {/* Source */}
           <div className="absolute bottom-4 right-4 pointer-events-none">
             <div className="bg-card/90 backdrop-blur-sm border border-border-dim rounded-lg px-2.5 py-1.5">
-              <span className="font-mono text-xs text-text-faint">🌐 Live · OpenStreetMap</span>
+              <span className="font-mono text-xs text-text-faint">Live &middot; OpenStreetMap</span>
             </div>
           </div>
         </div>
