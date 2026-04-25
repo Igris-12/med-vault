@@ -11,4 +11,9 @@ router.post('/', prescriptionsController.addPrescription);
 router.put('/:id', prescriptionsController.updatePrescription);
 router.get('/interaction-graph', prescriptionsController.getInteractionGraph);
 
+// ─── Prescription Viewer endpoints ──────────────────────────────────────────
+router.get('/extraction/:docId', prescriptionsController.getPrescriptionExtraction);
+router.post('/confirm/:docId', prescriptionsController.confirmPrescriptionExtraction);
+
 export default router;
+

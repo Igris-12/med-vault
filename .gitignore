@@ -19,3 +19,8 @@ build/
 
 # Uploads (user medical data — never commit)
 server/uploads/
+
+# Agent
+.agent/
+GEMINI.md
+.codex

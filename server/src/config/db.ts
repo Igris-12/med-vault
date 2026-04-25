@@ -5,7 +5,7 @@ dotenv.config();
 
 mongoose.set('strictQuery', true);
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/medvault';
+const MONGODB_URI = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/medvault';
 
 export const connectDB = async (): Promise<void> => {
   try {

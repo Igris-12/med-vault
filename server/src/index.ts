@@ -23,9 +23,18 @@ const app = express();
 const server = http.createServer(app);
 
 // ─── Socket.io ───────────────────────────────────────────────────────────────
+// Accept any localhost port in dev, or the explicit CLIENT_URL in prod
+const corsOrigin = (origin: string | undefined, cb: (err: Error | null, ok?: boolean) => void) => {
+  if (!origin || origin.startsWith('http://localhost') || origin === process.env.CLIENT_URL) {
+    cb(null, true);
+  } else {
+    cb(new Error(`CORS blocked: ${origin}`));
+  }
+};
+
 export const io = new SocketIOServer(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: corsOrigin,
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -44,7 +53,7 @@ io.on('connection', (socket: any) => {
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: corsOrigin,
   credentials: true,
 }));
 app.use(express.json({ limit: '5mb' }));

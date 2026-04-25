@@ -12,7 +12,7 @@ if (!apiKey) {
 export const genAI = new GoogleGenerativeAI(apiKey || 'missing-key');
 
 export const flashModel = genAI.getGenerativeModel({
-  model: 'gemini-1.5-flash',
+  model: 'gemini-3.1-flash-tts',
   generationConfig: {
     // Structured output — guarantees valid JSON, no markdown fences
     responseMimeType: 'application/json',
@@ -20,6 +20,6 @@ export const flashModel = genAI.getGenerativeModel({
 });
 
 export const flashChatModel = genAI.getGenerativeModel({
-  model: 'gemini-1.5-flash',
+  model: 'gemini-3.1-flash-tts',
   // Chat uses plain text (streaming)
 });
