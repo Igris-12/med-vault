@@ -21,6 +21,8 @@ const WADashboard   = lazy(() => import('./pages/reminders/WADashboard'));
 const WASchedule    = lazy(() => import('./pages/reminders/WASchedule'));
 const WAActivity    = lazy(() => import('./pages/reminders/WAActivity'));
 const WASettings    = lazy(() => import('./pages/reminders/WASettings'));
+const PatientGraphVisualization = lazy(() => import('./pages/PatientGraphVisualization'));
+const CalendarPage = lazy(() => import('./pages/Calendar'));
 
 function PageFallback() {
   return (
@@ -33,7 +35,7 @@ function PageFallback() {
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const location = useLocation();
-  const isFullBleed = location.pathname.includes('/locator');
+  const isFullBleed = location.pathname.includes('/locator') || location.pathname.includes('/graph');
 
   if (!loading && !user) {
     return <Navigate to="/" replace />;
@@ -81,10 +83,13 @@ export default function App() {
                 <Route path="upload"              element={<Upload />} />
                 <Route path="alerts"              element={<Alerts />} />
                 <Route path="locator"             element={<Locator />} />
+                <Route path="calendar"             element={<CalendarPage />} />
                 <Route path="reminders/dashboard" element={<WADashboard />} />
                 <Route path="reminders/schedule"  element={<WASchedule />} />
                 <Route path="reminders/activity"  element={<WAActivity />} />
                 <Route path="reminders/settings"  element={<WASettings />} />
+                <Route path="clinician/graph/patient/:id" element={<PatientGraphVisualization />} />
+                <Route path="symptom-graph"              element={<PatientGraphVisualization />} />
                 <Route path="reminders"           element={<Navigate to="reminders/dashboard" replace />} />
                 <Route path="*"                   element={<Navigate to="dashboard" replace />} />
               </Routes>
