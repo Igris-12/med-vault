@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import Map, { Marker, Popup, NavigationControl, Source, Layer } from 'react-map-gl/maplibre';
-import type { LineLayer, FillLayer } from 'react-map-gl/maplibre';
+import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { fetchNearbyPlaces, type NearbyPlace, type PlaceType } from '../services/overpassService';
 import { getRoute, formatDistance, formatDuration, createRadiusCircle, type RouteStep } from '../services/routeService';
@@ -641,8 +641,9 @@ export default function Locator() {
         </div>
 
         {/* Map */}
-        <div className="flex-1 relative">
+        <div className="flex-1 relative" style={{ minHeight: '400px' }}>
           <Map ref={mapRef} mapStyle={MAP_STYLE}
+            mapLib={maplibregl as any}
             initialViewState={{ latitude: lat, longitude: lng, zoom: 14 }}
             style={{ width: '100%', height: '100%' }}
             attributionControl={false}
@@ -658,7 +659,6 @@ export default function Locator() {
               }} />
               {/* Bold outer stroke */}
               <Layer id="radius-stroke-outer" type="line" paint={{
-                'fill-color': '#00E5C3',
                 'line-color': '#00E5C3',
                 'line-width': 4,
                 'line-opacity': 0.85,

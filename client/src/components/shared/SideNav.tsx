@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import {
   LayoutDashboard, Activity, FolderOpen, Pill, MessageSquare,
-  Upload, Smartphone, Settings, HeartPulse,
+  Upload, Smartphone, Settings, HeartPulse, Bell, MapPin,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -13,8 +13,9 @@ const NAV_ITEMS = [
   { to: '/app/prescriptions',       icon: Pill,            label: 'Prescriptions' },
   { to: '/app/chat',                icon: MessageSquare,   label: 'AI Chat' },
   { to: '/app/upload',              icon: Upload,          label: 'Upload' },
+  { to: '/app/alerts',              icon: Bell,            label: 'Alerts' },
+  { to: '/app/locator',             icon: MapPin,          label: 'Locator' },
   { to: '/app/reminders/dashboard', icon: Smartphone,      label: 'WA Reminders' },
-
 ];
 
 export function SideNav() {

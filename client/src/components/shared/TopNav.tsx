@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Bell, Settings, Command, LogOut, User, Clock, X } from 'lucide-react';
 import { useAppTheme } from '../../context/ThemeStateContext';
 import { THEMES, applyThemeVars } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 
 /* ─── Shared dropdown panel ─── */
 const Panel = ({ children, style = {} }: { children: React.ReactNode; style?: React.CSSProperties }) => (
@@ -51,6 +52,7 @@ function LiveClock() {
 
 export function TopNav() {
   const { theme, setThemeById } = useAppTheme();
+  const { logout, user } = useAuth();
   const location  = useLocation();
   const navigate  = useNavigate();
 
@@ -265,8 +267,8 @@ export function TopNav() {
           {showProfile && (
             <Panel>
               <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--dd-border)' }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dd-text)', fontFamily: 'Inter, system-ui, sans-serif' }}>Alex Kumar</div>
-                <div style={{ fontSize: 11, color: 'var(--dd-text-muted)', marginTop: 2 }}>alex@medvault.app</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dd-text)', fontFamily: 'Inter, system-ui, sans-serif' }}>{user?.displayName || 'User'}</div>
+                <div style={{ fontSize: 11, color: 'var(--dd-text-muted)', marginTop: 2 }}>{user?.email || 'user@example.com'}</div>
               </div>
               {[
                 { icon: User, label: 'Profile', action: () => { navigate('/app/reminders/settings'); setShowProfile(false); } },
@@ -282,7 +284,15 @@ export function TopNav() {
                 </div>
               ))}
               <div
-                onClick={() => { navigate('/'); setShowProfile(false); }}
+                onClick={async () => { 
+                  setShowProfile(false);
+                  try {
+                    await logout();
+                    navigate('/', { replace: true });
+                  } catch (err) {
+                    console.error('Logout failed:', err);
+                  }
+                }}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', cursor: 'pointer', transition: 'background 0.12s' }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}

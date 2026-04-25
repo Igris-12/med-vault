@@ -3,6 +3,7 @@ import { Suspense, lazy } from 'react';
 import { SideNav } from './components/shared/SideNav';
 import { TopNav } from './components/shared/TopNav';
 import { CardSkeleton } from './components/shared/Skeleton';
+import { useAuth } from './context/AuthContext';
 
 const Landing       = lazy(() => import('./pages/Landing'));
 const Dashboard     = lazy(() => import('./pages/Dashboard'));
@@ -30,8 +31,13 @@ function PageFallback() {
 }
 
 function AppLayout({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
   const location = useLocation();
   const isFullBleed = location.pathname.includes('/locator');
+
+  if (!loading && !user) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <div className="flex min-h-screen" style={{ background: 'var(--dd-bg)' }}>

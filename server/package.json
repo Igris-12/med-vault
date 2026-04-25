@@ -5,7 +5,6 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "dev": "nodemon --exec tsx src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js"
   },
@@ -37,12 +36,10 @@
     "mongoose": "^9.5.0",
     "morgan": "^1.10.1",
     "multer": "^2.1.1",
-    "qrcode": "^1.5.4",
-    "socket.io": "^4.8.3",
-    "twilio": "^6.0.0"
     "multer-storage-cloudinary": "^4.0.0",
     "pdfkit": "^0.18.0",
     "qrcode": "^1.5.4",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "twilio": "^6.0.0"
   }
 }
