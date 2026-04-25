@@ -11,5 +11,6 @@ router.get('/dashboard-summary', recordsController.getDashboardSummary);
 router.get('/anomalies', recordsController.getAnomalies);
 router.get('/documents', recordsController.getDocuments);
 router.get('/documents/:id', recordsController.getDocumentById);
+router.get('/alerts', recordsController.getAlerts);
 
 export default router;

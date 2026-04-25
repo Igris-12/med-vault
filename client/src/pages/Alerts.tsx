@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAlerts } from '../api/records';
 import { CardSkeleton, EmptyState } from '../components/shared/Skeleton';
 import type { HealthAlert, AlertCategory, AlertSeverity } from '../types/api';
@@ -116,14 +117,30 @@ function AlertCard({
         {/* Expanded: action + meta */}
         {expanded && (
           <div className="mt-4 animate-fade-in space-y-3">
-            {alert.action && (
+            {(alert.action || alert.specialist) && (
               <div className={`rounded-lg px-4 py-3 ${alert.severity === 'critical' ? 'bg-coral/10 border border-coral/20' : alert.severity === 'warning' ? 'bg-amber/10 border border-amber/20' : 'bg-teal/10 border border-teal/20'}`}>
                 <p className="font-sans text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
                   What to do
                 </p>
-                <p className="font-body text-sm text-text-primary leading-relaxed">
-                  {alert.action}
-                </p>
+                {alert.action && (
+                  <p className="font-body text-sm text-text-primary leading-relaxed">
+                    {alert.action}
+                  </p>
+                )}
+                {alert.specialist && (
+                  <div className="mt-3">
+                    <Link
+                      to={`/app/locator?type=doctor&specialty=${encodeURIComponent(alert.specialist)}`}
+                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all
+                        ${alert.severity === 'critical' ? 'bg-coral text-coral-text hover:bg-coral-light' :
+                          alert.severity === 'warning' ? 'bg-amber text-amber-text hover:bg-yellow-400' :
+                          'bg-teal text-teal-text hover:bg-teal-light'}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span>📍</span> Find {alert.specialist} Near Me
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
 
