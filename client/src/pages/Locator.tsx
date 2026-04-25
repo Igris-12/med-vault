@@ -5,7 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { fetchNearbyPlaces, type NearbyPlace, type PlaceType } from '../services/overpassService';
 import { getRoute, formatDistance, formatDuration, createRadiusCircle, type RouteStep } from '../services/routeService';
 import { getDoctorsForHospital, type Doctor } from '../mock/mockDoctors';
-import { MOCK_USER } from '../mock';
+
 
 // ─── Suggestions derived from user health data ────────────────────────────────
 const USER_SUGGESTIONS = [
@@ -188,21 +188,22 @@ function PlacePopup({ place, onRoute, onClose, isVisited }: {
 
 // ─── List Card ────────────────────────────────────────────────────────────────
 
-function PlaceCard({ place, isSelected, onClick }: {
-  place: NearbyPlace; isSelected: boolean; onClick: () => void;
+function PlaceCard({ place, isSelected, isVisited, onClick }: {
+  place: NearbyPlace; isSelected: boolean; isVisited: boolean; onClick: () => void;
 }) {
   const meta = PLACE_META[place.placeType];
   return (
     <div onClick={onClick}
-      className={`mv-card cursor-pointer transition-all duration-150 ${isSelected ? 'border-teal/50 shadow-teal-glow' : ''}`}>
+      className={`mv-card cursor-pointer transition-all duration-150 ${isSelected ? 'border-teal/50 shadow-teal-glow' : isVisited ? 'border-amber/40' : ''}`}>
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
-          style={{ background: `${meta.color}20` }}>{meta.icon}</div>
+          style={{ background: `${isVisited ? '#F5A623' : meta.color}20` }}>{meta.icon}</div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
             <span className="text-xs px-1.5 py-0.5 rounded-full font-body"
               style={{ color: meta.color, background: `${meta.color}20` }}>{meta.label}</span>
             {place.emergencyAvailable && <span className="badge-coral text-xs">🚨</span>}
+            {isVisited && <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber/20 text-amber font-body">⭐ Visited</span>}
           </div>
           <p className="font-sans font-medium text-sm text-text-primary truncate">{place.name}</p>
           <p className="font-body text-xs text-text-muted truncate">{place.address}</p>
@@ -619,9 +620,10 @@ export default function Locator() {
                   ? <div className="text-center py-12"><span className="text-3xl">🔍</span>
                       <p className="font-body text-sm text-text-muted mt-2">No results — adjust filters</p></div>
                   : filtered.map((p) => (
-                      <PlaceCard key={p.id} place={p} isSelected={selectedId === p.id}
+                      <PlaceCard key={p.id} place={p} isSelected={selectedId === p.id} isVisited={visited.has(p.id)}
                         onClick={() => {
                           setSelectedId(p.id);
+                          setVisited((prev) => { const next = new Set(prev); next.add(p.id); saveVisited(next); return next; });
                           mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom: 16, duration: 700 });
                         }} />
                     ))
