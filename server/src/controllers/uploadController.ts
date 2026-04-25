@@ -4,6 +4,7 @@ import path from 'path';
 import DocumentModel from '../models/Document.js';
 import { io } from '../index.js';
 import { extractDocumentQueued, generateEmbedding } from '../services/geminiService.js';
+import { uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 
 export const handleUpload = async (req: Request, res: Response): Promise<void> => {
   const files = req.files as Express.Multer.File[];
@@ -16,10 +17,27 @@ export const handleUpload = async (req: Request, res: Response): Promise<void> =
 
   const results = await Promise.all(
     files.map(async (file) => {
+      // Upload to Cloudinary
+      let cloudinaryUrl = file.path; // fallback to local path
+      try {
+        const buffer = await fs.promises.readFile(file.path);
+        const cloudResult = await uploadBufferToCloudinary(
+          buffer,
+          file.mimetype,
+          'medvault/documents',
+          userId
+        );
+        cloudinaryUrl = cloudResult.url;
+        // Remove local temp file
+        fs.unlink(file.path, () => {});
+      } catch (err) {
+        console.warn('Cloudinary upload failed, falling back to local path:', err);
+      }
+
       const doc = await DocumentModel.create({
         userId,
         filename: file.originalname,
-        filePath: file.path,
+        filePath: cloudinaryUrl,
         mimeType: file.mimetype,
         fileSize: file.size,
         status: 'processing',
@@ -33,7 +51,7 @@ export const handleUpload = async (req: Request, res: Response): Promise<void> =
       });
 
       // Non-blocking: respond immediately, process in background
-      setImmediate(() => processDocument(doc._id.toString(), file.path, file.mimetype, userId));
+      setImmediate(() => processDocument(doc._id.toString(), file.path, cloudinaryUrl, file.mimetype, userId));
 
       return { docId: doc._id.toString(), filename: file.originalname, status: 'processing' };
     })
@@ -44,14 +62,23 @@ export const handleUpload = async (req: Request, res: Response): Promise<void> =
 
 async function processDocument(
   docId: string,
-  filePath: string,
+  localPath: string,
+  cloudinaryUrl: string,
   mimeType: string,
   userId: string
 ): Promise<void> {
   try {
     io.to(userId).emit('document:status', { docId, status: 'processing', step: 'analyzing' });
 
-    const buffer = await fs.promises.readFile(filePath); // async — non-blocking
+    // Try to read from local path first (if file still exists), else re-download from Cloudinary
+    let buffer: Buffer;
+    try {
+      buffer = await fs.promises.readFile(localPath);
+    } catch {
+      const axios = (await import('axios')).default;
+      const resp = await axios.get<ArrayBuffer>(cloudinaryUrl, { responseType: 'arraybuffer' });
+      buffer = Buffer.from(resp.data);
+    }
 
     extractDocumentQueued(buffer, mimeType, async (extracted, rawResponse) => {
       if (!extracted) {
@@ -86,6 +113,7 @@ async function processDocument(
         {
           status: 'done',
           processedAt: new Date(),
+          filePath: cloudinaryUrl, // ensure Cloudinary URL is saved
           documentType: extracted.document_type,
           documentDate: extracted.document_date ? new Date(extracted.document_date) : undefined,
           sourceHospital: extracted.source_hospital,
@@ -120,7 +148,7 @@ async function processDocument(
 export const getStatus = async (req: Request, res: Response): Promise<void> => {
   const doc = await DocumentModel.findOne(
     { _id: req.params.docId, userId: req.user!.uid },
-    { status: 1, documentType: 1, criticalityScore: 1, summaryPlain: 1 }
+    { status: 1, documentType: 1, criticalityScore: 1, summaryPlain: 1, filePath: 1 }
   );
 
   if (!doc) {
