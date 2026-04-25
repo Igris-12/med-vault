@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import DocumentModel from '../models/Document.js';
 import { io } from '../index.js';
+import { extractDocumentQueued, generateEmbedding, extractPrescriptionWithBBoxes } from '../services/geminiService.js';
 import { extractDocumentQueued, generateEmbedding } from '../services/geminiService.js';
 import { uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 
@@ -130,6 +131,22 @@ async function processDocument(
         },
         { new: true, projection: { embedding: 0 } }
       );
+
+      // ── Prescription: second-pass bbox extraction ─────────────────────────────
+      // Only runs for image-type prescriptions; PDFs are skipped gracefully.
+      if (
+        extracted.document_type === 'prescription' &&
+        (mimeType.startsWith('image/'))
+      ) {
+        try {
+          const bboxData = await extractPrescriptionWithBBoxes(buffer, mimeType);
+          if (bboxData) {
+            await DocumentModel.findByIdAndUpdate(docId, { prescriptionExtraction: bboxData });
+          }
+        } catch (e) {
+          console.warn('Prescription bbox extraction failed (non-blocking):', e);
+        }
+      }
 
       io.to(userId).emit('document:status', {
         docId,

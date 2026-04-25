@@ -12,18 +12,14 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser]       = useState<User | null>(null);
+  const [user,    setUser]    = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // Persist the Firebase ID token for API calls
-        const token = await firebaseUser.getIdToken();
-        localStorage.setItem('firebase_token', token);
-      } else {
-        localStorage.removeItem('firebase_token');
-      }
+    // onAuthStateChanged fires on login, logout, and token refresh.
+    // We no longer cache the token in localStorage — getAuthToken() in base.ts
+    // calls auth.currentUser.getIdToken() directly, which auto-refreshes.
+    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
     });
@@ -31,14 +27,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function signInWithGoogle() {
-    const result = await signInWithPopup(auth, googleProvider);
-    const token  = await result.user.getIdToken();
-    localStorage.setItem('firebase_token', token);
+    await signInWithPopup(auth, googleProvider);
+    // Token is now managed by the Firebase SDK — no localStorage needed
   }
 
   async function logout() {
     await signOut(auth);
-    localStorage.removeItem('firebase_token');
   }
 
   return (

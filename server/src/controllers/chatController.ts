@@ -1,86 +1,62 @@
 import { Request, Response } from 'express';
 import DocumentModel from '../models/Document.js';
 import ChatSessionModel from '../models/ChatSession.js';
-import { generateEmbedding, streamChatResponse } from '../services/geminiService.js';
-import { findTopK } from '../services/vectorService.js';
-
-const SYSTEM_PROMPT = `
-You are MedVault AI, a helpful medical companion. You have access to the patient's medical records below.
-Rules:
-- Answer questions only based on the provided context documents.
-- Never diagnose conditions.
-- Always recommend consulting a real physician for clinical decisions.
-- Be empathetic and clear. Use plain language unless the patient asks for clinical detail.
-- Cite which document your information comes from using [Doc: type, date] format.
-`.trim();
+import { streamContextualChat } from '../services/geminiService.js';
 
 export const sendMessage = async (req: Request, res: Response): Promise<void> => {
   const { sessionId, message } = req.body;
   const userId = req.user!.uid;
 
-  // Set up SSE
+  // ── Set up SSE ───────────────────────────────────────────────────────────────
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
   try {
-    // 1. Generate query embedding
-    let queryVec: number[] = [];
-    try {
-      queryVec = await generateEmbedding(message);
-    } catch { /* fallback: return all docs */ }
+    // Load conversation history for multi-turn context
+    let conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    if (sessionId) {
+      const session = await ChatSessionModel.findById(sessionId).lean();
+      if (session?.messages) {
+        conversationHistory = (session.messages as any[])
+          .slice(-10) // last 5 turns
+          .map((m: any) => ({ role: m.role, content: m.content }));
+      }
+    }
 
-    // 2. Fetch embeddings and find top-3 relevant docs
-    const allDocs = await DocumentModel.find(
-      { userId, status: 'done' },
-      { embedding: 1, summaryPlain: 1, summaryClinical: 1, documentType: 1, documentDate: 1, _id: 1 }
-    );
-
-    const topDocs = queryVec.length > 0
-      ? findTopK(queryVec, allDocs as unknown as Array<{ embedding: number[]; [key: string]: unknown }>, 3)
-      : allDocs.slice(0, 3);
-
-    // 3. Build context
-    const contextBlocks = topDocs.map((doc: any, i: number) => {
-      const d = doc as { documentType: string; documentDate?: Date; summaryPlain: string; summaryClinical: string; _id: { toString(): string } };
-      return `[Context ${i + 1} — ${d.documentType}, ${d.documentDate?.toDateString() || 'Unknown date'}]\n${d.summaryPlain}\n${d.summaryClinical}`;
-    }).join('\n\n');
-
-    const fullContext = `${SYSTEM_PROMPT}\n\nPatient Records:\n${contextBlocks}`;
-    const sourceDocIds = topDocs.map((d: any) => (d as { _id: { toString(): string } })._id.toString());
-
-    // 4. Stream response
+    // Stream via the context-aware pipeline (MongoDB → contextBuilder → Gemini)
     let fullResponse = '';
-    for await (const chunk of streamChatResponse(fullContext, message)) {
+    for await (const chunk of streamContextualChat(userId, message, conversationHistory)) {
       fullResponse += chunk;
       res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
     }
 
-    // Send source doc IDs after stream
+    // Gather source doc IDs for UI citation (top 3 by recency)
+    const recentDocs = await DocumentModel.find(
+      { userId, status: 'done' },
+      { _id: 1 }
+    ).sort({ documentDate: -1 }).limit(3).lean();
+    const sourceDocIds = recentDocs.map((d: any) => d._id.toString());
+
     res.write(`data: ${JSON.stringify({ done: true, sourceDocIds })}\n\n`);
     res.end();
 
-    // 5. Persist to DB
+    // ── Persist to DB ──────────────────────────────────────────────────────────
+    const newMessages = [
+      { role: 'user',      content: message,      sourceDocIds: [],       timestamp: new Date() },
+      { role: 'assistant', content: fullResponse,  sourceDocIds,           timestamp: new Date() },
+    ];
+
     if (sessionId) {
       await ChatSessionModel.findByIdAndUpdate(sessionId, {
-        $push: {
-          messages: {
-            $each: [
-              { role: 'user', content: message, sourceDocIds: [], timestamp: new Date() },
-              { role: 'assistant', content: fullResponse, sourceDocIds, timestamp: new Date() },
-            ],
-          },
-        },
+        $push: { messages: { $each: newMessages } },
       });
     } else {
       await ChatSessionModel.create({
         userId,
         title: message.slice(0, 60),
-        messages: [
-          { role: 'user', content: message, sourceDocIds: [], timestamp: new Date() },
-          { role: 'assistant', content: fullResponse, sourceDocIds, timestamp: new Date() },
-        ],
+        messages: newMessages,
       });
     }
   } catch (err) {

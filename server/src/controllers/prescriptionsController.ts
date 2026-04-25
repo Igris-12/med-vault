@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import PrescriptionModel from '../models/Prescription.js';
+import DocumentModel from '../models/Document.js';
 import { checkInteractions } from '../services/geminiService.js';
 
 export const getPrescriptions = async (req: Request, res: Response): Promise<void> => {
@@ -80,4 +81,57 @@ export const getInteractionGraph = async (req: Request, res: Response): Promise<
   }
 
   res.json({ success: true, data: { nodes, edges } });
+};
+
+// ─── Prescription Viewer: fetch bbox extraction ───────────────────────────────
+// Returns the stored PrescriptionExtraction JSON + a URL to serve the image.
+export const getPrescriptionExtraction = async (req: Request, res: Response): Promise<void> => {
+  const doc = await DocumentModel.findOne(
+    { _id: req.params.docId, userId: req.user!.uid, documentType: 'prescription' },
+    { prescriptionExtraction: 1, filePath: 1, mimeType: 1, filename: 1, status: 1 }
+  );
+
+  if (!doc) {
+    res.status(404).json({ success: false, error: 'Prescription document not found' });
+    return;
+  }
+
+  if (!doc.prescriptionExtraction) {
+    res.status(202).json({ success: false, error: 'Extraction still processing or unavailable' });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      extraction: doc.prescriptionExtraction,
+      imageUrl: `/api/uploads/file/${req.params.docId}`,
+      filename: doc.filename,
+      status: doc.status,
+    },
+  });
+};
+
+// ─── Prescription Viewer: save confirmed / corrected data ─────────────────────
+// Persists manualCorrections (keyed by field path) onto the document record.
+export const confirmPrescriptionExtraction = async (req: Request, res: Response): Promise<void> => {
+  const { manualCorrections } = req.body as { manualCorrections: Record<string, string> };
+
+  const doc = await DocumentModel.findOne({
+    _id: req.params.docId,
+    userId: req.user!.uid,
+    documentType: 'prescription',
+  });
+
+  if (!doc) {
+    res.status(404).json({ success: false, error: 'Prescription document not found' });
+    return;
+  }
+
+  await DocumentModel.findByIdAndUpdate(req.params.docId, {
+    'prescriptionExtraction.manualCorrections': manualCorrections,
+    'prescriptionExtraction.confirmedAt': new Date().toISOString(),
+  });
+
+  res.json({ success: true, data: { confirmed: true, corrections: manualCorrections } });
 };

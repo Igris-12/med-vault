@@ -1,5 +1,82 @@
-import { flashModel, genAI } from '../config/gemini.js';
+/**
+ * geminiService.ts
+ *
+ * All AI *generation* calls (text + image) are routed through the
+ * ai/server.py Playwright proxy via aiClient.ts.
+ *
+ * Text embeddings still use the Google SDK directly
+ * (text-embedding-004), because the Gemini web UI does not
+ * expose an embeddings endpoint.
+ */
+
+import { embeddingModel } from '../config/gemini.js';
+import { queryText, queryImage } from './aiClient.js';
 import { Medication, LabValue } from '../types/api.js';
+
+// ContextBuilder is imported lazily inside functions to avoid circular deps
+// (contextBuilder → geminiService for generateEmbedding)
+
+// ─── Prescription BBox Extraction Types ───────────────────────────────────────
+export interface FieldExtraction {
+  value: string | null;
+  bounding_box: [number, number, number, number]; // [ymin, xmin, ymax, xmax] 0–1
+  confidence_score: number; // 1–100
+  confidence_reason: string;
+}
+
+export interface MedicationExtraction {
+  medication_name: FieldExtraction;
+  dosage: FieldExtraction;
+  frequency: FieldExtraction;
+  duration: FieldExtraction;
+  instructions: FieldExtraction;
+}
+
+export interface PrescriptionExtraction {
+  patient_name: FieldExtraction;
+  doctor_name: FieldExtraction;
+  date: FieldExtraction;
+  medications: MedicationExtraction[];
+  diagnosis: FieldExtraction;
+  overall_legibility: number;
+}
+
+// ─── Prescription BBox Prompt ────────────────────────────────────────────────
+const PRESCRIPTION_BBOX_PROMPT = `
+You are a medical document extraction AI. You will be given an image of a handwritten doctor's prescription.
+
+Your job is to extract all medical information and return it as a single valid JSON object. No explanation, no markdown, no backticks — pure JSON only.
+
+For EVERY field you extract, you must also return:
+1. A bounding_box as [ymin, xmin, ymax, xmax] in normalized coordinates (0.0 to 1.0), representing where on the image you found this text.
+2. A confidence_score from 1 to 100 based purely on how legible the handwriting is for that specific field.
+3. A confidence_reason: a single short phrase explaining the score (e.g. "clearly printed", "cursive, ambiguous letter", "partially obscured by ink smudge").
+
+Return this exact JSON structure:
+
+{
+  "patient_name": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+  "doctor_name": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+  "date": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+  "medications": [
+    {
+      "medication_name": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+      "dosage": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+      "frequency": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+      "duration": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+      "instructions": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" }
+    }
+  ],
+  "diagnosis": { "value": "", "bounding_box": [], "confidence_score": 0, "confidence_reason": "" },
+  "overall_legibility": 0
+}
+
+Rules:
+- If a field is not present in the prescription, set value to null and confidence_score to 0.
+- Bounding boxes must tightly wrap only the handwritten text for that field, not the entire document.
+- overall_legibility is the average confidence across all extracted fields, rounded to the nearest integer.
+- Never hallucinate drug names. If you cannot read a medication name with at least 40% confidence, set value to "ILLEGIBLE" and confidence_score to the actual score.
+`.trim();
 
 // ─── Extraction Prompt ────────────────────────────────────────────────────────
 const EXTRACTION_PROMPT = `
@@ -32,7 +109,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
       lastError = err as Error;
       if (attempt < maxAttempts) {
         const delay = Math.pow(3, attempt - 1) * 1000;
-        console.warn(`Gemini attempt ${attempt} failed. Retrying in ${delay}ms...`);
+        console.warn(`AI proxy attempt ${attempt} failed. Retrying in ${delay}ms... (${lastError.message})`);
         await new Promise((r) => setTimeout(r, delay));
       }
     }
@@ -40,7 +117,13 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
   throw lastError;
 }
 
-// ─── Call queue (serial processing) ─────────────────────────────────────────
+// ─── Strip JSON fences that the web UI may add ────────────────────────────────
+function stripJsonFences(text: string): string {
+  // Remove ```json ... ``` or ``` ... ``` wrappers
+  return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+}
+
+// ─── Call queue (serial processing — prevents browser tab overload) ───────────
 type QueueTask = () => Promise<void>;
 const queue: QueueTask[] = [];
 let isProcessing = false;
@@ -80,6 +163,7 @@ export interface ExtractedDocument {
   tags: string[];
 }
 
+// ─── Document extraction (queued, non-blocking) ───────────────────────────────
 export function extractDocumentQueued(
   buffer: Buffer,
   mimeType: string,
@@ -95,42 +179,36 @@ async function extractDocument(
   buffer: Buffer,
   mimeType: string
 ): Promise<{ data: ExtractedDocument | null; raw?: string }> {
-  const base64 = buffer.toString('base64');
-
   return withRetry(async () => {
-    const result = await flashModel.generateContent([
-      EXTRACTION_PROMPT,
-      { inlineData: { mimeType, data: base64 } },
-    ]);
+    const text = await queryImage(EXTRACTION_PROMPT, buffer, mimeType);
+    const cleaned = stripJsonFences(text);
 
-    const text = result.response.text();
-
-    // responseMimeType: 'application/json' guarantees valid JSON, but still guard
     try {
-      const parsed = JSON.parse(text) as ExtractedDocument;
+      const parsed = JSON.parse(cleaned) as ExtractedDocument;
       return { data: parsed };
     } catch {
-      console.error('JSON parse failed despite structured output mode:', text.slice(0, 200));
+      console.error('JSON parse failed for document extraction:', cleaned.slice(0, 200));
       return { data: null, raw: text };
     }
   });
 }
 
+// ─── Embedding (SDK only — web UI has no embeddings endpoint) ─────────────────
 export async function generateEmbedding(text: string): Promise<number[]> {
   return withRetry(async () => {
-    const result = await genAI.getGenerativeModel({ model: 'text-embedding-004' }).embedContent({
+    const result = await embeddingModel.embedContent({
       content: { role: 'user', parts: [{ text }] },
     });
     return result.embedding.values;
   });
 }
 
+// ─── Anomaly insight ──────────────────────────────────────────────────────────
 export async function generateAnomalyInsight(
   testName: string,
   readings: Array<{ value: number; unit: string; date: string }>
 ): Promise<string> {
   return withRetry(async () => {
-    const chatModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const prompt = `
 A patient has the following ${testName} readings over time:
 ${readings.map((r) => `- ${r.date}: ${r.value} ${r.unit}`).join('\n')}
@@ -140,11 +218,12 @@ Do not diagnose. Do not recommend specific treatments. Be honest but reassuring.
 Return only the paragraph text, no preamble.
 `.trim();
 
-    const result = await chatModel.generateContent(prompt);
-    return result.response.text().trim();
+    const response = await queryText(prompt);
+    return response.trim();
   });
 }
 
+// ─── Drug interaction check ───────────────────────────────────────────────────
 export async function checkInteractions(
   drugNames: string[]
 ): Promise<Array<{ drug1: string; drug2: string; severity: string; description: string }>> {
@@ -158,36 +237,109 @@ If no interactions, return an empty array [].
 Return ONLY valid JSON, no markdown.
 `.trim();
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      generationConfig: { responseMimeType: 'application/json' },
-    });
-
-    const result = await model.generateContent(prompt);
-    return JSON.parse(result.response.text());
+    const text = await queryText(prompt);
+    const cleaned = stripJsonFences(text);
+    return JSON.parse(cleaned);
   });
 }
 
+// ─── Streaming chat response ──────────────────────────────────────────────────
+// The ai/server.py proxy is synchronous — it waits for the full response.
+// We yield a single chunk so SSE consumers still work transparently.
+//
+// Pass a pre-built systemContext string, OR pass userId to auto-build context.
 export async function* streamChatResponse(
   systemContext: string,
-  userMessage: string
+  userMessage: string,
 ): AsyncGenerator<string> {
-  const chatModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
   const fullPrompt = `${systemContext}\n\nPatient question: ${userMessage}`;
-  const stream = await chatModel.generateContentStream(fullPrompt);
-
-  for await (const chunk of stream.stream) {
-    const text = chunk.text();
-    if (text) yield text;
-  }
+  const response = await withRetry(async () => queryText(fullPrompt));
+  yield response;
 }
 
-// ─── Non-streaming response (for WhatsApp — cannot stream) ───────────────────
+/**
+ * Context-aware chat: fetches patient data from MongoDB and builds
+ * a rich prompt automatically. Use this instead of streamChatResponse
+ * when you have a userId but no pre-built context.
+ */
+export async function* streamContextualChat(
+  userId: string,
+  userMessage: string,
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>,
+): AsyncGenerator<string> {
+  // Lazy import to avoid circular dependency
+  const { buildUserContext, assemblePrompt } = await import('./contextBuilder.js');
+
+  const ctx = await buildUserContext(userId, userMessage);
+
+  const historySnippet = (conversationHistory ?? [])
+    .slice(-6)
+    .map((m) => `${m.role === 'user' ? 'Patient' : 'MedVault AI'}: ${m.content}`)
+    .join('\n');
+
+  const systemPrompt = `You are MedVault AI, an empathetic medical records assistant.
+Rules:
+- Answer ONLY based on the provided patient context and medical evidence.
+- Never diagnose conditions or recommend specific treatments.
+- Always recommend consulting a real physician for clinical decisions.
+- Be clear, concise, and compassionate. Use plain language.
+- Cite document dates when referencing specific records.
+- If the context doesn't contain enough information to answer, say so honestly.`;
+
+  const fullPrompt = assemblePrompt(
+    ctx.block,
+    `${systemPrompt}${
+      historySnippet ? `\n\nConversation so far:\n${historySnippet}` : ''
+    }\n\nPatient asks: ${userMessage}`,
+  );
+
+  const response = await withRetry(async () => queryText(fullPrompt));
+  yield response;
+}
+
+// ─── Prescription BBox Extractor ──────────────────────────────────────────────
+// Used exclusively for handwritten prescription images.
+export async function extractPrescriptionWithBBoxes(
+  buffer: Buffer,
+  mimeType: string
+): Promise<PrescriptionExtraction | null> {
+  return withRetry(async () => {
+    const text = await queryImage(PRESCRIPTION_BBOX_PROMPT, buffer, mimeType);
+    const cleaned = stripJsonFences(text);
+
+    try {
+      return JSON.parse(cleaned) as PrescriptionExtraction;
+    } catch {
+      console.error('Prescription bbox JSON parse failed:', cleaned.slice(0, 200));
+      return null;
+    }
+  });
+}
+
+// ─── Non-streaming response (WhatsApp, tips, etc.) ───────────────────────────
 export async function generateContent(prompt: string): Promise<string> {
   return withRetry(async () => {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    const result = await model.generateContent(prompt);
-    return result.response.text().trim();
+    const response = await queryText(prompt);
+    return response.trim();
+  });
+}
+
+/**
+ * Context-aware non-streaming response.
+ * Automatically fetches the patient's light context (profile + meds)
+ * and prepends it to the prompt. Used for WhatsApp tips, health summaries, etc.
+ */
+export async function generateContextualContent(
+  userId: string,
+  prompt: string,
+): Promise<string> {
+  const { buildLightContext, assemblePrompt } = await import('./contextBuilder.js');
+  const contextBlock = await buildLightContext(userId);
+  const fullPrompt = assemblePrompt(contextBlock, prompt);
+
+  return withRetry(async () => {
+    const response = await queryText(fullPrompt);
+    return response.trim();
   });
 }
 

@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { usePrescriptions, useInteractionGraph } from '../api/prescriptions';
+import { usePrescriptions, useInteractionGraph, usePrescriptionExtraction } from '../api/prescriptions';
+import { useDocuments } from '../api/records';
 import { InteractionGraph } from '../components/viz/InteractionGraph';
+import PrescriptionViewer from '../components/upload/PrescriptionViewer';
 import { CardSkeleton, EmptyState } from '../components/shared/Skeleton';
 import type { InteractionSeverity } from '../types/api';
 
@@ -16,6 +18,17 @@ export default function Prescriptions() {
   const { data: graph, loading: gLoading } = useInteractionGraph();
   const [hoveredDrugId, setHoveredDrugId] = useState<string | null>(null);
 
+  // ── Prescription Viewer state ──────────────────────────────────────────────
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+
+  // Fetch prescription-type documents to show in the viewer selector
+  const { data: docsResult, loading: docsLoading } = useDocuments({ type: 'prescription', limit: 20 });
+  const prescriptionDocs = docsResult?.docs ?? [];
+
+  // Fetch extraction data for the selected document
+  const { data: extractionResult, loading: extractionLoading, error: extractionError } =
+    usePrescriptionExtraction(selectedDocId);
+
   const active = prescriptions?.filter((p) => p.status === 'active') || [];
   const discontinued = prescriptions?.filter((p) => p.status === 'discontinued') || [];
 
@@ -29,7 +42,78 @@ export default function Prescriptions() {
         </p>
       </div>
 
-      {/* Interaction Graph */}
+      {/* ── Prescription Viewer ─────────────────────────────────────────────── */}
+      <div className="mv-card flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h2 className="section-title">Handwriting X-Ray Viewer</h2>
+          <span className="text-[10px] font-mono text-text-faint uppercase tracking-widest">
+            Hover fields → see on image
+          </span>
+        </div>
+
+        {/* Document selector */}
+        {docsLoading ? (
+          <div className="skeleton h-9 w-full rounded-md" />
+        ) : prescriptionDocs.length === 0 ? (
+          <EmptyState
+            message="Upload a prescription image to use the X-Ray Viewer"
+            icon="🩺"
+          />
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {prescriptionDocs.map((doc) => (
+              <button
+                key={doc._id}
+                onClick={() => setSelectedDocId(doc._id === selectedDocId ? null : doc._id)}
+                className={`px-3 py-1.5 text-xs font-mono rounded-md border transition-all duration-150 ${
+                  selectedDocId === doc._id
+                    ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-400'
+                    : 'border-border-dim text-text-muted hover:border-text-faint hover:text-text-primary'
+                }`}
+              >
+                {doc.filename}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Viewer body */}
+        {selectedDocId && (
+          <>
+            {extractionLoading && (
+              <div className="flex flex-col gap-2">
+                <div className="skeleton h-[600px] w-full rounded-md" />
+              </div>
+            )}
+
+            {extractionError && !extractionLoading && (
+              <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-md p-4">
+                <span className="text-amber-400 text-lg">⏳</span>
+                <div>
+                  <p className="text-sm font-mono text-amber-400">Extraction not yet available</p>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    This document may still be processing, or was uploaded as a PDF (image required for X-Ray view).
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {extractionResult && !extractionLoading && (
+              <PrescriptionViewer
+                docId={selectedDocId}
+                imageUrl={extractionResult.imageUrl}
+                extractionData={extractionResult.extraction}
+                onConfirm={() => {
+                  // Optionally show a success toast
+                  console.log('Prescription confirmed and saved.');
+                }}
+              />
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Drug Interaction Map */}
       <div className="mv-card flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h2 className="section-title">Drug Interaction Map</h2>
