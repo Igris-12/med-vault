@@ -12,8 +12,8 @@ export const connectDB = async (): Promise<void> => {
     await mongoose.connect(MONGODB_URI);
     console.log('✅ MongoDB connected:', MONGODB_URI.replace(/\/\/.*@/, '//***@'));
   } catch (error) {
-    console.error('❌ MongoDB connection failed:', error);
-    process.exit(1);
+    console.warn('⚠️  MongoDB unavailable:', error instanceof Error ? error.message : error);
+    throw error; // let caller decide
   }
 
   mongoose.connection.on('error', (err: any) => {
