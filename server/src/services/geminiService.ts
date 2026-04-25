@@ -192,7 +192,7 @@ export async function generateAnomalyInsight(
   readings: Array<{ value: number; unit: string; date: string }>
 ): Promise<string> {
   return withRetry(async () => {
-    const chatModel = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-tts' });
+    const chatModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const prompt = `
 A patient has the following ${testName} readings over time:
 ${readings.map((r) => `- ${r.date}: ${r.value} ${r.unit}`).join('\n')}
@@ -234,7 +234,7 @@ export async function* streamChatResponse(
   systemContext: string,
   userMessage: string
 ): AsyncGenerator<string> {
-  const chatModel = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-tts' });
+  const chatModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
   const fullPrompt = `${systemContext}\n\nPatient question: ${userMessage}`;
   const stream = await chatModel.generateContentStream(fullPrompt);
 
