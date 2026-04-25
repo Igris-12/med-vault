@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { to: '/app/chat',                icon: MessageSquare,   label: 'AI Chat' },
   { to: '/app/upload',              icon: Upload,          label: 'Upload' },
   { to: '/app/reminders/dashboard', icon: Smartphone,      label: 'WA Reminders' },
+
 ];
 
 export function SideNav() {

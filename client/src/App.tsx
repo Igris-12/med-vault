@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { SideNav } from './components/shared/SideNav';
 import { TopNav } from './components/shared/TopNav';
@@ -11,6 +11,9 @@ const Records       = lazy(() => import('./pages/Records'));
 const Prescriptions = lazy(() => import('./pages/Prescriptions'));
 const Chat          = lazy(() => import('./pages/Chat'));
 const Upload        = lazy(() => import('./pages/Upload'));
+// ── New feature pages ─────────────────────────────────────────────────────
+const Alerts        = lazy(() => import('./pages/Alerts'));
+const Locator       = lazy(() => import('./pages/Locator'));
 // ── WA Reminder Module ────────────────────────────────────────────────────
 const WALanding     = lazy(() => import('./pages/reminders/WALanding'));
 const WADashboard   = lazy(() => import('./pages/reminders/WADashboard'));
@@ -27,14 +30,24 @@ function PageFallback() {
 }
 
 function AppLayout({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const isFullBleed = location.pathname.includes('/locator');
+
   return (
     <div className="flex min-h-screen" style={{ background: 'var(--dd-bg)' }}>
       <SideNav />
       <TopNav />
-      <main className="flex-1 overflow-y-auto" style={{ marginLeft: 64, paddingTop: 56, background: 'var(--dd-bg)' }}>
-        <div className="max-w-7xl mx-auto p-6">
-          {children}
-        </div>
+      <main
+        className={`flex-1 ${isFullBleed ? 'overflow-hidden' : 'overflow-y-auto'}`}
+        style={{ marginLeft: 64, paddingTop: 56, background: 'var(--dd-bg)' }}
+      >
+        {isFullBleed ? (
+          children
+        ) : (
+          <div className="max-w-7xl mx-auto p-6">
+            {children}
+          </div>
+        )}
       </main>
     </div>
   );
@@ -42,7 +55,11 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--dd-bg)' }}><span className="font-mono animate-pulse" style={{ color: 'var(--dd-accent)' }}>Loading MedVault…</span></div>}>
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--dd-bg)' }}>
+        <span className="font-mono animate-pulse" style={{ color: 'var(--dd-accent)' }}>Loading MedVault…</span>
+      </div>
+    }>
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/reminders" element={<WALanding />} />
@@ -56,6 +73,8 @@ export default function App() {
                 <Route path="prescriptions"       element={<Prescriptions />} />
                 <Route path="chat"                element={<Chat />} />
                 <Route path="upload"              element={<Upload />} />
+                <Route path="alerts"              element={<Alerts />} />
+                <Route path="locator"             element={<Locator />} />
                 <Route path="reminders/dashboard" element={<WADashboard />} />
                 <Route path="reminders/schedule"  element={<WASchedule />} />
                 <Route path="reminders/activity"  element={<WAActivity />} />

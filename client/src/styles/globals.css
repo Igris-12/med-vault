@@ -269,3 +269,17 @@
   }
   .wa-cursor-none { cursor: none; }
 }
+
+/* ── Maplibre popup reset ─────────────────────────────────────────────── */
+.mv-popup .maplibregl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 12px;
+}
+.mv-popup .maplibregl-popup-tip {
+  display: none !important;
+}
+.mv-popup .maplibregl-popup-close-button {
+  display: none !important;
+}

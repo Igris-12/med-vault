@@ -177,3 +177,89 @@ export const getDocumentById = async (req: Request, res: Response): Promise<void
 
   res.json({ success: true, data: doc });
 };
+
+export const getAlerts = async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user!.uid;
+  const docs = await DocumentModel.find({ userId, status: 'done' }).sort({ documentDate: -1 });
+
+  const alerts: any[] = [];
+  const processedTests = new Set<string>();
+
+  for (const doc of docs) {
+    // 1. Abnormal lab values
+    if (doc.labValues) {
+      for (const lab of doc.labValues) {
+        if (lab.is_abnormal && !processedTests.has(lab.test_name)) {
+          processedTests.add(lab.test_name);
+          alerts.push({
+            _id: `alert-abnormal-${lab.test_name}-${doc._id}`,
+            category: 'abnormal',
+            severity: 'warning',
+            title: `Abnormal ${lab.test_name}`,
+            description: `Your recent test showed ${lab.test_name} at ${lab.value} ${lab.unit}, which is outside the normal range (${lab.reference_range}).`,
+            action: 'Discuss these results with your primary care physician.',
+            relatedTest: lab.test_name,
+            relatedDocumentId: doc._id.toString(),
+            createdAt: doc.documentDate || doc.uploadedAt,
+            dismissed: false,
+          });
+        }
+      }
+    }
+
+    // 2. High criticality insights
+    if (doc.criticalityScore >= 8) {
+      alerts.push({
+        _id: `alert-crit-${doc._id}`,
+        category: 'sudden_change',
+        severity: 'critical',
+        title: 'Critical Health Event Detected',
+        description: `A recent record (${doc.documentType}) was flagged with a high criticality score. ${doc.summaryPlain}`,
+        action: 'Ensure follow-up appointments are scheduled.',
+        relatedDocumentId: doc._id.toString(),
+        createdAt: doc.documentDate || doc.uploadedAt,
+        dismissed: false,
+      });
+    }
+
+    // 3. Specialist suggestions based on conditions
+    if (doc.conditionsMentioned && doc.conditionsMentioned.length > 0) {
+      for (const condition of doc.conditionsMentioned) {
+        let specialist = '';
+        const lowerCond = condition.toLowerCase();
+        if (lowerCond.includes('heart') || lowerCond.includes('hypertension')) specialist = 'Cardiology';
+        else if (lowerCond.includes('diabetes') || lowerCond.includes('thyroid')) specialist = 'Endocrinology';
+        else if (lowerCond.includes('kidney') || lowerCond.includes('renal')) specialist = 'Nephrology';
+        else if (lowerCond.includes('asthma') || lowerCond.includes('lung')) specialist = 'Pulmonology';
+        
+        if (specialist) {
+          alerts.push({
+            _id: `alert-spec-${specialist}-${doc._id}`,
+            category: 'suggestion',
+            severity: 'info',
+            title: `Recommended: ${specialist} Consult`,
+            description: `Based on your recent record mentioning ${condition}, a routine checkup with a specialist might be beneficial.`,
+            action: 'Use the Locator to find a recommended specialist near you.',
+            specialist,
+            relatedDocumentId: doc._id.toString(),
+            createdAt: doc.documentDate || doc.uploadedAt,
+            dismissed: false,
+          });
+        }
+      }
+    }
+  }
+
+  // Deduplicate suggestions by specialist
+  const seenSpec = new Set();
+  const finalAlerts = alerts.filter(a => {
+    if (a.category === 'suggestion') {
+      if (seenSpec.has(a.specialist)) return false;
+      seenSpec.add(a.specialist);
+    }
+    return true;
+  });
+
+  res.json({ success: true, data: finalAlerts });
+};
+
