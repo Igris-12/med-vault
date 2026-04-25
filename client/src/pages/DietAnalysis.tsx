@@ -14,7 +14,15 @@ export default function DietAnalysis() {
     }, 2500);
   };
 
-  const THEME = { bg: '#F8FAFC', card: '#FFFFFF', primary: '#4F46E5', accent: '#10B981', text: '#1E293B', muted: '#64748B', border: '#E2E8F0' };
+  const THEME = { 
+    bg: 'var(--dd-bg)', 
+    card: 'var(--dd-card)', 
+    primary: 'var(--dd-accent)', 
+    accent: '#10B981', 
+    text: 'var(--dd-text)', 
+    muted: 'var(--dd-muted)', 
+    border: 'var(--dd-border)' 
+  };
 
   return (
     <div style={{ fontFamily: 'Inter, sans-serif', color: THEME.text, maxWidth: 1200, margin: '0 auto', paddingBottom: 40 }}>
@@ -37,10 +45,10 @@ export default function DietAnalysis() {
           onMouseEnter={e => e.currentTarget.style.borderColor = THEME.primary}
           onMouseLeave={e => e.currentTarget.style.borderColor = THEME.border}
         >
-          <div style={{ background: '#EEF2FF', padding: 20, borderRadius: '50%' }}>
+          <div style={{ background: 'rgba(79, 70, 229, 0.1)', padding: 20, borderRadius: '50%' }}>
             <Camera size={40} color={THEME.primary} />
           </div>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Click to upload meal photo</h3>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: THEME.text }}>Click to upload meal photo</h3>
           <p style={{ margin: 0, color: THEME.muted, fontSize: 14 }}>Supports JPG, PNG, WEBP</p>
         </div>
       )}
@@ -51,7 +59,7 @@ export default function DietAnalysis() {
             <BrainCircuit size={48} color={THEME.primary} />
           </div>
           <style>{`@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.05); } }`}</style>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Analyzing Food Nutrients...</h3>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: THEME.text }}>Analyzing Food Nutrients...</h3>
           <p style={{ margin: 0, color: THEME.muted, fontSize: 14 }}>Extracting ingredients and cross-referencing with your clinical profile.</p>
         </div>
       )}
@@ -64,7 +72,7 @@ export default function DietAnalysis() {
             <div style={{ flex: 1, minWidth: 300, background: THEME.card, border: `1px solid ${THEME.border}`, borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
               <img src={photo!} alt="Meal" style={{ width: '100%', height: 260, objectFit: 'cover' }} />
               <div style={{ padding: 20 }}>
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Grilled Chicken Salad</h3>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: THEME.text }}>Grilled Chicken Salad</h3>
                 <p style={{ margin: '4px 0 0', color: THEME.muted, fontSize: 14 }}>Estimated Weight: 350g</p>
               </div>
             </div>
@@ -73,7 +81,7 @@ export default function DietAnalysis() {
             <div style={{ flex: 1, minWidth: 300, background: THEME.card, border: `1px solid ${THEME.border}`, borderRadius: 16, padding: 24, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
                 <PieChart size={20} color={THEME.primary} />
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Nutrients Analysis</h3>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: THEME.text }}>Nutrients Analysis</h3>
               </div>
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -85,10 +93,10 @@ export default function DietAnalysis() {
                   { label: 'Iron', val: '3.2mg', col: '#8B5CF6', pct: 70 },
                   { label: 'Sodium', val: '410mg', col: '#64748B', pct: 45 },
                 ].map(n => (
-                  <div key={n.label} style={{ background: '#F8FAFC', padding: 16, borderRadius: 12 }}>
+                  <div key={n.label} style={{ background: 'rgba(100, 116, 139, 0.05)', padding: 16, borderRadius: 12 }}>
                     <div style={{ fontSize: 12, color: THEME.muted, fontWeight: 700, textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.5px' }}>{n.label}</div>
                     <div style={{ fontSize: 20, fontWeight: 800, color: THEME.text, marginBottom: 8 }}>{n.val}</div>
-                    <div style={{ height: 6, background: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ height: 6, background: 'rgba(100, 116, 139, 0.2)', borderRadius: 3, overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${n.pct}%`, background: n.col, borderRadius: 3 }} />
                     </div>
                   </div>
@@ -102,13 +110,13 @@ export default function DietAnalysis() {
             <div style={{ flex: 1, minWidth: 300, background: THEME.card, border: `1px solid ${THEME.border}`, borderRadius: 16, padding: 24, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                 <BrainCircuit size={20} color={THEME.primary} />
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>AI Clinical Suggestion (RAG)</h3>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: THEME.text }}>AI Clinical Suggestion (RAG)</h3>
               </div>
-              <div style={{ background: '#EEF2FF', border: '1px solid #C7D2FE', padding: 20, borderRadius: 12 }}>
-                <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: '#312E81' }}>
+              <div style={{ background: 'rgba(79, 70, 229, 0.08)', border: '1px solid rgba(79, 70, 229, 0.2)', padding: 20, borderRadius: 12 }}>
+                <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: THEME.text }}>
                   Based on your <strong>extracted patient history</strong> (Type 2 Diabetes and elevated cholesterol), this meal is a safe choice. The grilled chicken provides lean protein without excess saturated fats. 
                   <br/><br/>
-                  <em>Suggestion:</em> Consider swapping the creamy dressing for olive oil and vinegar to better align with your cardiovascular goals.
+                  <em style={{ color: THEME.primary }}>Suggestion:</em> Consider swapping the creamy dressing for olive oil and vinegar to better align with your cardiovascular goals.
                 </p>
               </div>
             </div>
@@ -118,7 +126,7 @@ export default function DietAnalysis() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <Target size={20} color={THEME.accent} />
-                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Daily Targets & Next Steps</h3>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: THEME.text }}>Daily Targets & Next Steps</h3>
                 </div>
               </div>
               
@@ -130,21 +138,21 @@ export default function DietAnalysis() {
                     <span style={{ fontSize: 13, fontWeight: 600, color: THEME.muted }}>Daily Carbohydrates (Diabetic History)</span>
                     <span style={{ fontSize: 13, fontWeight: 700, color: THEME.primary }}>120 / 180 g</span>
                   </div>
-                  <div style={{ height: 8, background: '#E2E8F0', borderRadius: 4, overflow: 'hidden' }}>
+                  <div style={{ height: 8, background: 'rgba(100, 116, 139, 0.2)', borderRadius: 4, overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: '66%', background: THEME.primary, borderRadius: 4 }} />
                   </div>
                 </div>
 
                 {/* Clinical Alert */}
-                <div style={{ background: '#FFFBEB', border: '1px solid #FEF3C7', padding: 12, borderRadius: 8, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <div style={{ background: 'rgba(217, 119, 6, 0.1)', border: '1px solid rgba(217, 119, 6, 0.2)', padding: 12, borderRadius: 8, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                   <AlertTriangle size={16} color="#D97706" style={{ marginTop: 2, flexShrink: 0 }} />
-                  <p style={{ margin: 0, fontSize: 13, color: '#92400E', lineHeight: 1.5 }}>
-                    <strong>Blood Sugar Alert:</strong> Based on your HbA1c history, avoid simple carbohydrates for dinner to prevent overnight glucose spikes.
+                  <p style={{ margin: 0, fontSize: 13, color: THEME.text, lineHeight: 1.5 }}>
+                    <strong style={{ color: '#D97706' }}>Blood Sugar Alert:</strong> Based on your HbA1c history, avoid simple carbohydrates for dinner to prevent overnight glucose spikes.
                   </p>
                 </div>
 
                 {/* AI Next Meal */}
-                <div style={{ marginTop: 'auto', background: '#F8FAFC', border: `1px solid ${THEME.border}`, borderRadius: 12, padding: 16 }}>
+                <div style={{ marginTop: 'auto', background: 'rgba(100, 116, 139, 0.05)', border: `1px solid ${THEME.border}`, borderRadius: 12, padding: 16 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: THEME.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>AI Dinner Recommendation</div>
                   <h4 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: THEME.text }}>Baked Salmon with Asparagus</h4>
                   <p style={{ margin: 0, fontSize: 13, color: THEME.muted, lineHeight: 1.5 }}>
@@ -159,7 +167,7 @@ export default function DietAnalysis() {
             </div>
           </div>
           
-          <button onClick={() => setStatus('idle')} style={{ alignSelf: 'center', marginTop: 16, padding: '12px 32px', background: '#F1F5F9', color: THEME.text, border: `1px solid ${THEME.border}`, borderRadius: 8, fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#E2E8F0'} onMouseLeave={e => e.currentTarget.style.background = '#F1F5F9'}>
+          <button onClick={() => setStatus('idle')} style={{ alignSelf: 'center', marginTop: 16, padding: '12px 32px', background: 'transparent', color: THEME.text, border: `1px solid ${THEME.border}`, borderRadius: 8, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(100, 116, 139, 0.1)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
             Analyze Another Meal
           </button>
         </div>
