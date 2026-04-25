@@ -181,3 +181,12 @@ export async function* streamChatResponse(
     if (text) yield text;
   }
 }
+
+// ─── Non-streaming response (for WhatsApp — cannot stream) ───────────────────
+export async function generateContent(prompt: string): Promise<string> {
+  return withRetry(async () => {
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const result = await model.generateContent(prompt);
+    return result.response.text().trim();
+  });
+}

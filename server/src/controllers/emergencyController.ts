@@ -1,5 +1,4 @@
 import { Request, Response } from 'express';
-import QRCode from 'qrcode';
 import UserModel from '../models/User.js';
 import PrescriptionModel from '../models/Prescription.js';
 
@@ -85,6 +84,8 @@ export const getQRImage = async (req: Request, res: Response): Promise<void> => 
   if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return; }
 
   const url = `${process.env.CLIENT_URL || 'http://localhost:3001'}/api/emergency/public/${user.emergencyToken}`;
+  // Dynamic import for CJS-only package — required in ESM + tsx environment
+  const QRCode = (await import('qrcode')).default;
   const buffer = await QRCode.toBuffer(url, { width: 300, margin: 2 });
 
   res.setHeader('Content-Type', 'image/png');

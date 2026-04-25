@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { MOCK_USER } from '../mock';
+import { WhatsAppConnect } from '../components/WhatsAppConnect';
 import type { BloodType } from '../types/api';
+
 
 const BLOOD_TYPES: BloodType[] = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'unknown'];
 
@@ -317,6 +319,9 @@ export default function Emergency() {
           </div>
         </div>
       </div>
+
+      {/* WhatsApp integration */}
+      <WhatsAppConnect />
     </div>
   );
 }

@@ -7,5 +7,7 @@ const router = Router();
 router.post('/sync', authMiddleware, usersController.syncUser);
 router.get('/profile', authMiddleware, usersController.getProfile);
 router.put('/profile', authMiddleware, usersController.updateProfile);
+router.post('/link-whatsapp', authMiddleware, usersController.linkWhatsApp);
 
 export default router;
+
