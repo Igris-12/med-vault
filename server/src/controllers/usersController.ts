@@ -19,7 +19,7 @@ export const syncUser = async (req: Request, res: Response): Promise<void> => {
       },
       $set: { email, name, photoUrl: picture },
     },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: 'after' }
   );
 
   res.json({ success: true, data: user });
@@ -32,11 +32,21 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
 };
 
 export const updateProfile = async (req: Request, res: Response): Promise<void> => {
+  const allowed = [
+    'name', 'bloodType', 'dateOfBirth', 'allergies', 'emergencyContacts',
+    'modePreference', 'notificationPrefs', 'uiPrefs', 'photoUrl',
+  ];
+  const updates: Record<string, unknown> = {};
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) updates[key] = req.body[key];
+  }
+
   const user = await UserModel.findByIdAndUpdate(
     req.user!.uid,
-    { $set: req.body },
-    { new: true }
+    { $set: updates },
+    { returnDocument: 'after', runValidators: true }
   );
+  if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return; }
   res.json({ success: true, data: user });
 };
 
@@ -54,26 +64,34 @@ export const linkWhatsApp = async (req: Request, res: Response): Promise<void> =
       ? `+${digits}`
       : `+91${digits}`;
 
+    // Upsert: create user document if it doesn't exist yet (first-time login without syncUser)
     const user = await UserModel.findByIdAndUpdate(
       req.user!.uid,
-      { $set: { whatsappPhone: e164 } },
-      { new: true }
+      {
+        $setOnInsert: {
+          _id: req.user!.uid,
+          email: req.user!.email || '',
+          name: req.user!.name || 'MedVault User',
+          photoUrl: req.user!.picture || '',
+          emergencyToken: uuidv4(),
+          bloodType: 'unknown',
+          allergies: [],
+          emergencyContacts: [],
+          modePreference: 'patient',
+        },
+        $set: { whatsappPhone: e164 },
+      },
+      { upsert: true, returnDocument: 'after' }
     );
-
-    if (!user) {
-      res.status(404).json({ success: false, error: 'User not found' });
-      return;
-    }
 
     // Send a confirmation WhatsApp to prove the link works
     try {
-      const firstName = user.name.split(' ')[0];
+      const firstName = (user?.name || 'there').split(' ')[0];
       await sendWhatsAppMessage(
         e164,
         `✅ MedVault connected!\n\nHi ${firstName}! Your health assistant is ready.\n\nSend *menu* to see what I can do, or just ask me anything about your records.`
       );
     } catch (err) {
-      // Don't fail the endpoint if WhatsApp delivery fails — phone is already saved
       console.warn('WhatsApp welcome message failed:', err);
     }
 
