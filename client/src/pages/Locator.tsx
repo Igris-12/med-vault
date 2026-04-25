@@ -562,8 +562,8 @@ export default function Locator() {
           {/* List OR Directions panel */}
           <div className="flex-1 overflow-y-auto">
             {routeInfo || routeLoading ? (
-              /* -- Directions Panel -- */
               <div className="flex flex-col h-full">
+                {/* -- Directions Panel -- */}
                 {/* Header */}
                 <div className="px-4 py-3 border-b border-border-dim bg-teal/5">
                   <div className="flex items-center justify-between mb-1">
@@ -614,8 +614,8 @@ export default function Locator() {
                 </div>
               </div>
             ) : (
-              /* -- Place List -- */
               <div className="p-3 space-y-2">
+                {/* -- Place List -- */}
                 {filtered.length === 0
                   ? <div className="text-center py-12"><span className="text-3xl">🔍</span>
                       <p className="font-body text-sm text-text-muted mt-2">No results -- adjust filters</p></div>
@@ -719,7 +719,6 @@ export default function Locator() {
           </div>
 
           {/* Route info card removed -- now shown in sidebar */}
-        </div>
 
           {/* Legend */}
           <div className="absolute bottom-4 left-4 flex flex-wrap gap-2 pointer-events-none max-w-xs">
