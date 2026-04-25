@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import {
   LayoutDashboard, Activity, FolderOpen, Pill, MessageSquare,
-  Upload, Smartphone, Settings, HeartPulse, Bell, MapPin, Network, CalendarDays,
+  Upload, Smartphone, Settings, HeartPulse, Bell, MapPin, Network, CalendarDays, Apple
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { to: '/app/locator',             icon: MapPin,          label: 'Locator' },
   { to: '/app/calendar',            icon: CalendarDays,    label: 'Calendar' },
   { to: '/app/symptom-graph',       icon: Network,         label: 'Symptom Graph' },
+  { to: '/app/diet',                icon: Apple,           label: 'Diet Analysis' },
   { to: '/app/reminders/dashboard', icon: Smartphone,      label: 'WA Reminders' },
 ];
 

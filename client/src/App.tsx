@@ -23,6 +23,7 @@ const WAActivity    = lazy(() => import('./pages/reminders/WAActivity'));
 const WASettings    = lazy(() => import('./pages/reminders/WASettings'));
 const PatientGraphVisualization = lazy(() => import('./pages/PatientGraphVisualization'));
 const CalendarPage = lazy(() => import('./pages/Calendar'));
+const DietAnalysis = lazy(() => import('./pages/DietAnalysis'));
 
 function PageFallback() {
   return (
@@ -88,6 +89,7 @@ export default function App() {
                 <Route path="reminders/schedule"  element={<WASchedule />} />
                 <Route path="reminders/activity"  element={<WAActivity />} />
                 <Route path="reminders/settings"  element={<WASettings />} />
+                <Route path="diet"                element={<DietAnalysis />} />
                 <Route path="clinician/graph/patient/:id" element={<PatientGraphVisualization />} />
                 <Route path="symptom-graph"              element={<PatientGraphVisualization />} />
                 <Route path="reminders"           element={<Navigate to="reminders/dashboard" replace />} />
