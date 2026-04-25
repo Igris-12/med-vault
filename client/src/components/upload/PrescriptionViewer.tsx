@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { PrescriptionExtraction, FieldExtraction, MedicationExtraction } from '../../types/api';
 import { confirmExtraction } from '../../api/prescriptions';
-import { getAuthToken } from '../../api/base';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -127,8 +126,7 @@ export default function PrescriptionViewer({ docId, imageUrl, extractionData, on
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(!!extractionData.confirmedAt);
 
-  // Build the authenticated image src using the token
-  const authToken = getAuthToken();
+  // Build the authenticated image URL
   const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
   const authenticatedImageUrl = `${API_BASE}${imageUrl}`;
 
@@ -196,7 +194,7 @@ export default function PrescriptionViewer({ docId, imageUrl, extractionData, on
         {/* ── Left: Image panel ── */}
         <div className="relative flex-1 lg:max-w-[55%] bg-[#080a10] overflow-hidden select-none">
           <img
-            src={`${authenticatedImageUrl}?token=${authToken}`}
+            src={authenticatedImageUrl}
             alt="Prescription"
             className="w-full h-full object-contain"
             draggable={false}

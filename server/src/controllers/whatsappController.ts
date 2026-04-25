@@ -8,7 +8,7 @@ import {
   generateEmbedding,
   generateContent,
 } from '../services/geminiService.js';
-import { findTopK } from '../services/vectorService.js';
+import { buildUserContext, buildLightContext, assemblePrompt } from '../services/contextBuilder.js';
 import { sendWhatsAppMessage, sendWhatsAppMenu } from '../services/whatsappService.js';
 
 // ─── Session types ────────────────────────────────────────────────────────────
@@ -98,9 +98,7 @@ function isMenuCommand(body: string): boolean {
   const menuTriggers = [
     'menu', 'hi', 'hello', 'start', 'back', 'home',
     '1', '2', '3', '4', '5', '6', '7',
-    // List picker item names (Twilio sends the item name as body)
     'health summary', 'active medications', 'upload document', 'emergency card',
-    // New features
     'tip', 'tips', 'appointment', 'appointments', 'vitals', 'bmi',
   ];
   return menuTriggers.includes(lower);
@@ -114,7 +112,6 @@ async function handleAccountLinking(
   const user = await UserModel.findOne({ whatsappPhone: phoneNumber });
   if (user) {
     session.userId = user._id.toString();
-    // Send welcome back text, then immediately send the interactive menu
     setImmediate(async () => {
       try { await sendWhatsAppMenu(phoneNumber); } catch { /* ignore */ }
     });
@@ -186,7 +183,6 @@ async function handleDocumentUpload(
     return `Please link your MedVault account first.\n\nSend *hi* to get started.`;
   }
 
-  // Respond immediately — async processing happens in background
   processDocumentAsync(session.userId, mediaUrl, mediaType, session.phoneNumber);
 
   return (
@@ -223,11 +219,10 @@ async function processDocumentAsync(
         return;
       }
 
-      // Save document record
       const doc = await DocumentModel.create({
         userId,
         filename: `whatsapp_upload_${Date.now()}`,
-        filePath: mediaUrl,           // store origin URL as filePath
+        filePath: mediaUrl,
         mimeType: mediaType,
         fileSize: fileBuffer.length,
         status: 'done',
@@ -285,7 +280,6 @@ async function processDocumentAsync(
         }
       }
 
-      // Build reply
       const critEmoji =
         extracted.criticality_score >= 7 ? '🔴' :
         extracted.criticality_score >= 4 ? '🟡' : '🟢';
@@ -321,7 +315,6 @@ async function processDocumentAsync(
       }
 
       lines.push(``, `Ask me anything about this document!`);
-
       await sendWhatsAppMessage(phoneNumber, lines.join('\n'));
     });
   } catch (err) {
@@ -337,20 +330,18 @@ async function processDocumentAsync(
 async function handleMenuCommand(session: WhatsAppSession, body: string): Promise<string> {
   const lower = body.toLowerCase().trim();
 
-  // List picker item names (from Content Template)
-  if (lower === '1' || lower === 'health summary')      return handleHealthSummary(session);
-  if (lower === '2' || lower === 'active medications')  return handleMedications(session);
-  if (lower === '3' || lower === 'lab results')         return handleLabResults(session);
+  if (lower === '1' || lower === 'health summary')     return handleHealthSummary(session);
+  if (lower === '2' || lower === 'active medications') return handleMedications(session);
+  if (lower === '3' || lower === 'lab results')        return handleLabResults(session);
   if (lower === '4' || lower === 'upload document') {
     session.awaitingUpload = true;
     return `📤 Ready to receive your document!\n\nPlease send a *photo* of any medical report, prescription, or lab result.\n\nI'll extract and save all the details automatically using AI! 🤖`;
   }
   if (lower === 'emergency card') return handleEmergencyRequest(session, session.phoneNumber);
-  if (lower === '5' || lower === 'drug interactions')   return handleDrugInteractions(session);
+  if (lower === '5' || lower === 'drug interactions') return handleDrugInteractions(session);
   if (lower === '6' || lower === 'tip' || lower === 'tips') return getHealthTip(session);
   if (lower === '7' || lower === 'vitals' || lower === 'bmi') return handleVitalsSummary(session);
 
-  // Default — send the interactive native menu
   setImmediate(async () => {
     try { await sendWhatsAppMenu(session.phoneNumber); } catch { /* ignore */ }
   });
@@ -475,21 +466,18 @@ async function handleDrugInteractions(session: WhatsAppSession): Promise<string>
   return lines.join('\n');
 }
 
-// ─── Health tip (AI-generated based on user records) ─────────────────────────
+// ─── Health tip (AI-generated, fully context-aware) ──────────────────────────
 async function getHealthTip(session: WhatsAppSession): Promise<string> {
   if (!session.userId) return `Link your account first to get personalised tips! Send *hi*.`;
 
-  const recentDoc = await DocumentModel.findOne({ userId: session.userId! })
-    .sort({ documentDate: -1 })
-    .select('summaryPlain conditionsMentioned tags');
+  // buildLightContext: profile + active meds — fast and personalised
+  const contextBlock = await buildLightContext(session.userId);
+  const prompt = assemblePrompt(
+    contextBlock,
+    `You are a friendly health coach. Based on this specific patient's profile above, give ONE personalised, actionable health tip for today. Keep it under 60 words. No markdown. Be warm and encouraging. If they have active medications or known allergies, factor those in.`
+  );
 
-  const context = recentDoc
-    ? `Patient context: ${recentDoc.summaryPlain}. Conditions: ${recentDoc.conditionsMentioned?.join(', ')}`
-    : 'No records on file yet.';
-
-  const prompt = `You are a friendly health coach. Based on this patient's medical context, give ONE specific, actionable health tip for today. Keep it under 60 words. No markdown. Be warm and encouraging.\n\nContext: ${context}`;
   const tip = await generateContent(prompt);
-
   return `💡 *Today's Health Tip*\n\n${tip.trim()}\n\n_Send *tip* anytime for a new tip!_`;
 }
 
@@ -525,64 +513,34 @@ async function handleVitalsSummary(session: WhatsAppSession): Promise<string> {
   return lines.join('\n');
 }
 
-// ─── AI query (vector search → Gemini) ───────────────────────────────────────
+// ─── AI query (context-aware via contextBuilder + Gemini) ─────────────────────
 async function handleAIQuery(session: WhatsAppSession, userMessage: string): Promise<string> {
-  const userDocs = await DocumentModel.find(
-    { userId: session.userId! },
-    { embedding: 1, summaryPlain: 1, summaryClinical: 1, documentType: 1, documentDate: 1 }
-  );
-
-  let contextText = '';
-
-  if (userDocs.length > 0) {
-    try {
-      const queryEmbedding = await generateEmbedding(userMessage);
-      const docsWithEmbeddings = userDocs.filter((d) => d.embedding?.length > 0);
-      if (docsWithEmbeddings.length > 0) {
-        const topDocs = findTopK(queryEmbedding, docsWithEmbeddings as any, 3);
-        contextText = (topDocs as any[])
-          .map((d: any, i: number) => {
-            const date = d.documentDate
-              ? new Date(d.documentDate).toLocaleDateString('en-IN')
-              : 'Unknown date';
-            return `[Document ${i + 1} — ${formatDocType(d.documentType)}, ${date}]:\n${d.summaryPlain}`;
-          })
-          .join('\n\n');
-      }
-    } catch {
-      console.warn('Embedding/vector search failed, falling back to no context');
-    }
+  if (!session.userId) {
+    return `Please link your MedVault account first. Send *hi* to get started.`;
   }
+
+  // Full context: profile + active meds + semantically-relevant docs + rising trends
+  const ctx = await buildUserContext(session.userId, userMessage);
 
   const historySnippet = session.conversationHistory
     .slice(-6)
-    .map((m) => `${m.role}: ${m.content}`)
+    .map((m) => `${m.role === 'user' ? 'Patient' : 'Assistant'}: ${m.content}`)
     .join('\n');
 
-  const prompt = contextText
-    ? `You are a helpful medical records assistant for MedVault.
-Answer questions about the patient's health records based ONLY on the provided documents.
-Keep responses concise (under 200 words) — this is WhatsApp, not an essay.
-Use simple language. Do not use markdown (no ** or ##).
-If you can't find the answer in the documents, say so honestly.
-Never diagnose. Always recommend consulting a doctor for clinical decisions.
+  const taskPrompt =
+    `You are a helpful medical records assistant for MedVault (WhatsApp).\n` +
+    `Rules:\n` +
+    `- Answer ONLY based on the patient context above.\n` +
+    `- Keep responses concise (under 200 words) — this is WhatsApp.\n` +
+    `- Use simple language. No markdown (* or #). Plain text only.\n` +
+    `- If the context doesn't answer the question, say so honestly.\n` +
+    `- Never diagnose. Always recommend consulting a doctor.\n` +
+    (historySnippet ? `\nConversation history:\n${historySnippet}` : '') +
+    `\n\nPatient asks: ${userMessage}`;
 
-Patient's documents:
-${contextText}
-
-Conversation history:
-${historySnippet}
-
-Patient asks: ${userMessage}`
-    : `You are a helpful medical records assistant for MedVault.
-No documents are on file for this patient yet.
-Keep responses concise (under 100 words).
-Use simple language. Do not use markdown.
-
-Patient asks: ${userMessage}`;
-
-  const result = await generateContent(prompt);
-  return result.replace(/\*\*/g, '*').replace(/#{1,3} /g, '').trim();
+  const fullPrompt = assemblePrompt(ctx.block, taskPrompt);
+  const result = await generateContent(fullPrompt);
+  return result.replace(/\*\*/g, '').replace(/#{1,3} /g, '').trim();
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

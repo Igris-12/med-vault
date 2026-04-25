@@ -8,6 +8,7 @@ import { Server as SocketIOServer } from 'socket.io';
 
 import { connectDB } from './config/db.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { isAiServerHealthy } from './services/aiClient.js';
 
 // Routes
 import uploadRoutes from './routes/upload.js';
@@ -67,11 +68,14 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {
   const { default: mongoose } = await import('mongoose');
+  const aiProxyHealthy = await isAiServerHealthy();
   res.json({
     success: true,
     data: {
       status: 'ok',
       dbConnected: mongoose.connection.readyState === 1,
+      aiProxyConnected: aiProxyHealthy,
+      aiProxyUrl: process.env.AI_SERVER_URL || 'http://localhost:5000',
       timestamp: new Date().toISOString(),
       env: process.env.NODE_ENV || 'development',
     },
@@ -104,6 +108,17 @@ const start = async () => {
   } catch (err) {
     console.warn('\n⚠️  MongoDB unavailable — starting server without DB (mock/frontend mode)\n', err instanceof Error ? err.message : err);
   }
+
+  // Check if ai/server.py Playwright proxy is reachable
+  const aiUrl = process.env.AI_SERVER_URL || 'http://localhost:5000';
+  const aiOk = await isAiServerHealthy();
+  if (aiOk) {
+    console.log(`🤖 AI proxy connected at ${aiUrl}`);
+  } else {
+    console.warn(`⚠️  AI proxy NOT reachable at ${aiUrl} — start ai/server.py first.`);
+    console.warn(`   Generation calls (chat, upload extraction, etc.) will fail until it starts.`);
+  }
+
   server.listen(PORT, () => {
     console.log(`\n🚀 MedVault server running on http://localhost:${PORT}`);
     console.log(`📡 Health check: http://localhost:${PORT}/api/health\n`);

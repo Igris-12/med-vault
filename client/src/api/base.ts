@@ -6,22 +6,30 @@
  *   const { data, loading, error } = useDashboardSummary();
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { auth } from '../config/firebase';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-const IS_DEV = import.meta.env.DEV;
-const DEV_BYPASS_TOKEN = 'dev-bypass-token';
+const IS_DEV   = import.meta.env.DEV;
 
-// ─── Auth token helper (supports dev-bypass mode) ────────────────────────────
-export function getAuthToken(): string {
-  // In mock mode, return the dev bypass token — no Firebase needed
-  if (import.meta.env.VITE_USE_MOCK === 'true') return DEV_BYPASS_TOKEN;
+// ─── Auth token helper ────────────────────────────────────────────────────────
+/**
+ * Always fetches a fresh Firebase ID token via the SDK.
+ * Firebase auto-refreshes expired tokens transparently — no manual caching needed.
+ * Falls back to the dev-bypass token when there's no logged-in user in local dev.
+ */
+export async function getAuthToken(): Promise<string> {
+  // Mock mode: bypass Firebase entirely
+  if (import.meta.env.VITE_USE_MOCK === 'true') return 'dev-bypass-token';
 
-  // In real mode, prefer a Firebase token but fall back to the existing
-  // development bypass path so protected routes still work in local dev.
-  const firebaseToken = localStorage.getItem('firebase_token');
-  if (firebaseToken) return firebaseToken;
-  if (IS_DEV) return DEV_BYPASS_TOKEN;
+  const currentUser = auth.currentUser;
+  if (currentUser) {
+    // forceRefresh=false: returns cached token if still valid, refreshes if expired
+    return currentUser.getIdToken(false);
+  }
+
+  // No Firebase user — use dev bypass only in development
+  if (IS_DEV) return 'dev-bypass-token';
 
   return '';
 }
@@ -31,7 +39,7 @@ export async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = getAuthToken();
+  const token = await getAuthToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
@@ -50,30 +58,38 @@ export async function apiFetch<T>(
   return json.data as T;
 }
 
-// ─── Generic data fetching hook ────────────────────────────────────────────────
+// ─── Generic data fetching hook ───────────────────────────────────────────────
 export function useApiData<T>(
   fetcher: () => Promise<T>,
   deps: unknown[] = []
 ): { data: T | null; loading: boolean; error: string | null; refetch: () => void } {
-  const [data, setData] = useState<T | null>(null);
+  const [data,    setData]    = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error,   setError]   = useState<string | null>(null);
 
-  const fetch = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // Track mount state to avoid setState after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const load = useCallback(async () => {
+    if (isMounted.current) setLoading(true);
+    if (isMounted.current) setError(null);
     try {
       const result = await fetcher();
-      setData(result);
+      if (isMounted.current) setData(result);
     } catch (err) {
-      setError((err as Error).message);
+      if (isMounted.current) setError((err as Error).message);
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { load(); }, [load]);
 
-  return { data, loading, error, refetch: fetch };
+  return { data, loading, error, refetch: load };
 }

@@ -47,11 +47,12 @@ export async function streamChatMessage(
   }
 
   const url = `${API_BASE}/api/chat/message`;
+  const token = await getAuthToken();
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${getAuthToken()}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ sessionId, message }),
   });
