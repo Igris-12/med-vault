@@ -3,7 +3,7 @@ import Map, { Marker, Popup, NavigationControl, Source, Layer } from 'react-map-
 import type { LineLayer, FillLayer } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { fetchNearbyPlaces, type NearbyPlace, type PlaceType } from '../services/overpassService';
-import { getRoute, formatDistance, formatDuration, createRadiusCircle } from '../services/routeService';
+import { getRoute, formatDistance, formatDuration, createRadiusCircle, type RouteStep } from '../services/routeService';
 
 const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
@@ -220,7 +220,8 @@ export default function Locator() {
 
   // Routing state
   const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.LineString | null>(null);
-  const [routeInfo, setRouteInfo] = useState<{ distance: string; duration: string } | null>(null);
+  const [routeInfo, setRouteInfo] = useState<{ distance: string; duration: string; dest: string } | null>(null);
+  const [routeSteps, setRouteSteps] = useState<RouteStep[]>([]);
   const [routeLoading, setRouteLoading] = useState(false);
 
   const mapRef = useRef<any>(null);
@@ -275,11 +276,12 @@ export default function Locator() {
     setRouteLoading(true);
     setRouteGeoJSON(null);
     setRouteInfo(null);
+    setRouteSteps([]);
     try {
       const result = await getRoute(uLng, uLat, place.lng, place.lat);
       setRouteGeoJSON(result.geometry);
-      setRouteInfo({ distance: formatDistance(result.distanceMeters), duration: formatDuration(result.durationSeconds) });
-      // Fit map to show full route
+      setRouteSteps(result.steps);
+      setRouteInfo({ distance: formatDistance(result.distanceMeters), duration: formatDuration(result.durationSeconds), dest: place.name });
       const coords = result.geometry.coordinates as [number, number][];
       const lngs = coords.map(c => c[0]);
       const lats = coords.map(c => c[1]);
@@ -288,7 +290,7 @@ export default function Locator() {
         { padding: 60, duration: 800 }
       );
     } catch {
-      setRouteInfo({ distance: '—', duration: 'Route unavailable' });
+      setRouteInfo({ distance: '—', duration: 'Route unavailable', dest: place.name });
     } finally {
       setRouteLoading(false);
     }
@@ -428,19 +430,76 @@ export default function Locator() {
             </div>
           </div>
 
-          {/* List */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {filtered.length === 0
-              ? <div className="text-center py-12"><span className="text-3xl">🔍</span>
-                  <p className="font-body text-sm text-text-muted mt-2">No results — adjust filters</p></div>
-              : filtered.map((p) => (
-                  <PlaceCard key={p.id} place={p} isSelected={selectedId === p.id}
-                    onClick={() => {
-                      setSelectedId(p.id);
-                      mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom: 16, duration: 700 });
-                    }} />
-                ))
-            }
+          {/* List OR Directions panel */}
+          <div className="flex-1 overflow-y-auto">
+            {routeInfo || routeLoading ? (
+              /* ── Directions Panel ── */
+              <div className="flex flex-col h-full">
+                {/* Header */}
+                <div className="px-4 py-3 border-b border-border-dim bg-teal/5">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-sans font-semibold text-sm text-teal">🗺️ Directions</span>
+                    <button onClick={() => { setRouteGeoJSON(null); setRouteInfo(null); setRouteSteps([]); }}
+                      className="text-xs text-text-faint hover:text-coral transition-colors">✕ Clear</button>
+                  </div>
+                  {routeInfo && (
+                    <div>
+                      <p className="font-sans text-xs font-medium text-text-primary truncate">→ {routeInfo.dest}</p>
+                      <div className="flex gap-3 mt-1">
+                        <span className="font-mono text-sm font-bold text-teal">{routeInfo.distance}</span>
+                        <span className="font-mono text-sm text-text-muted">{routeInfo.duration}</span>
+                        <span className="font-body text-xs text-text-faint self-end">driving</span>
+                      </div>
+                    </div>
+                  )}
+                  {routeLoading && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="w-3 h-3 border-2 border-teal/30 border-t-teal rounded-full animate-spin" />
+                      <span className="font-mono text-xs text-teal">Calculating route…</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Step list */}
+                <div className="flex-1 overflow-y-auto divide-y divide-border-dim">
+                  {routeSteps.map((step, i) => (
+                    <div key={i} className={`flex items-start gap-3 px-4 py-3
+                      ${step.instruction === 'You have arrived' ? 'bg-teal/10' : 'hover:bg-surface/50'}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-base
+                        ${step.instruction === 'You have arrived' ? 'bg-teal/20 text-teal'
+                        : i === 0 ? 'bg-coral/15 text-coral' : 'bg-surface text-text-muted'}`}>
+                        {step.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-body text-sm text-text-primary leading-snug">{step.instruction}</p>
+                        {step.distanceMeters > 0 && step.instruction !== 'You have arrived' && (
+                          <p className="font-mono text-xs text-text-faint mt-0.5">{formatDistance(step.distanceMeters)}</p>
+                        )}
+                      </div>
+                      <span className="font-mono text-xs text-text-faint flex-shrink-0 w-5 text-right">{i + 1}</span>
+                    </div>
+                  ))}
+                  {routeInfo && routeSteps.length === 0 && !routeLoading && (
+                    <p className="text-center py-8 font-body text-sm text-text-faint">No step data available</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* ── Place List ── */
+              <div className="p-3 space-y-2">
+                {filtered.length === 0
+                  ? <div className="text-center py-12"><span className="text-3xl">🔍</span>
+                      <p className="font-body text-sm text-text-muted mt-2">No results — adjust filters</p></div>
+                  : filtered.map((p) => (
+                      <PlaceCard key={p.id} place={p} isSelected={selectedId === p.id}
+                        onClick={() => {
+                          setSelectedId(p.id);
+                          mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom: 16, duration: 700 });
+                        }} />
+                    ))
+                }
+              </div>
+            )}
           </div>
 
           {/* Re-locate */}
@@ -460,17 +519,17 @@ export default function Locator() {
             onClick={() => { setSelectedId(null); }}>
             <NavigationControl position="top-right" />
 
-            {/* Radius circle */}
+            {/* Radius circle — visible ring showing search area */}
             <Source id="radius" type="geojson" data={createRadiusCircle(lng, lat, radius)}>
               <Layer id="radius-fill" type="fill" paint={{
                 'fill-color': '#00E5C3',
-                'fill-opacity': 0.07,
+                'fill-opacity': 0.08,
               }} />
               <Layer id="radius-stroke" type="line" paint={{
                 'line-color': '#00E5C3',
-                'line-width': 1.5,
-                'line-opacity': 0.4,
-                'line-dasharray': [4, 3],
+                'line-width': 2.5,
+                'line-opacity': 0.7,
+                'line-dasharray': [6, 3],
               }} />
             </Source>
 
@@ -510,24 +569,15 @@ export default function Locator() {
             )}
           </Map>
 
-          {/* Route info card */}
-          {(routeLoading || routeInfo) && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-card/95 backdrop-blur-sm border border-teal/40 rounded-2xl px-5 py-3 flex items-center gap-4 shadow-teal-glow">
-              {routeLoading
-                ? <><div className="w-4 h-4 border-2 border-teal/30 border-t-teal rounded-full animate-spin" />
-                    <span className="font-mono text-xs text-teal">Calculating route…</span></>
-                : <>
-                    <span className="font-mono text-sm font-bold text-teal">{routeInfo?.distance}</span>
-                    <span className="text-border-mid">·</span>
-                    <span className="font-mono text-sm text-text-muted">{routeInfo?.duration}</span>
-                    <span className="text-border-mid">·</span>
-                    <span className="font-body text-xs text-text-faint">driving</span>
-                    <button onClick={() => { setRouteGeoJSON(null); setRouteInfo(null); }}
-                      className="text-text-faint hover:text-coral transition-colors ml-1">✕</button>
-                  </>
-              }
+          {/* Radius label badge on map */}
+          <div className="absolute top-4 left-4 pointer-events-none">
+            <div className="bg-card/90 backdrop-blur-sm border border-teal/40 rounded-full px-3 py-1.5 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-teal/40 border border-teal" />
+              <span className="font-mono text-xs text-teal font-semibold">{radius >= 1000 ? `${radius / 1000} km` : `${radius} m`} radius</span>
             </div>
-          )}
+          </div>
+
+          {/* Route info card removed — now shown in sidebar */}
         </div>
 
           {/* Legend */}
