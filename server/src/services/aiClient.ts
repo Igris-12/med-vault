@@ -104,7 +104,7 @@ export async function queryImage(
 
   const result = await postJSON<AiServerResponse>(
     `${AI_SERVER_URL}/img`,
-    { query: prompt, image: base64 },
+    { query: prompt, image: base64, mime_type: mimeType },
   );
 
   if (result.status !== 'success' || !result.response) {
