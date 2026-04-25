@@ -9,7 +9,7 @@ import {
   generateContent,
 } from '../services/geminiService.js';
 import { findTopK } from '../services/vectorService.js';
-import { sendWhatsAppMessage } from '../services/whatsappService.js';
+import { sendWhatsAppMessage, sendWhatsAppMenu } from '../services/whatsappService.js';
 
 // ─── Session types ────────────────────────────────────────────────────────────
 interface WhatsAppSession {
@@ -64,9 +64,9 @@ export async function handleIncomingWhatsApp(req: Request, res: Response): Promi
 
     twiml.message(responseText);
     res.send(twiml.toString());
-  } catch (err) {
+  } catch (err: any) {
     console.error('WhatsApp webhook error:', err);
-    twiml.message('Sorry, something went wrong. Please try again.');
+    twiml.message(`Error: ${err.message}`);
     res.send(twiml.toString());
   }
 }
@@ -95,7 +95,15 @@ function isEmergencyKeyword(body: string): boolean {
 
 function isMenuCommand(body: string): boolean {
   const lower = body.toLowerCase().trim();
-  return ['menu', 'hi', 'hello', 'start', '1', '2', '3', '4', '5'].includes(lower);
+  const menuTriggers = [
+    'menu', 'hi', 'hello', 'start', 'back', 'home',
+    '1', '2', '3', '4', '5', '6', '7',
+    // List picker item names (Twilio sends the item name as body)
+    'health summary', 'active medications', 'upload document', 'emergency card',
+    // New features
+    'tip', 'tips', 'appointment', 'appointments', 'vitals', 'bmi',
+  ];
+  return menuTriggers.includes(lower);
 }
 
 // ─── Account linking ──────────────────────────────────────────────────────────
@@ -106,13 +114,11 @@ async function handleAccountLinking(
   const user = await UserModel.findOne({ whatsappPhone: phoneNumber });
   if (user) {
     session.userId = user._id.toString();
-    return (
-      `✅ Welcome back, ${user.name.split(' ')[0]}!\n\n` +
-      `You're connected to MedVault. Send me:\n` +
-      `• Any medical document (photo or PDF)\n` +
-      `• A question about your health records\n` +
-      `• *menu* to see all commands`
-    );
+    // Send welcome back text, then immediately send the interactive menu
+    setImmediate(async () => {
+      try { await sendWhatsAppMenu(phoneNumber); } catch { /* ignore */ }
+    });
+    return `✅ Welcome back, ${user.name.split(' ')[0]}! Here's your menu:`;
   }
 
   return (
@@ -331,27 +337,24 @@ async function processDocumentAsync(
 async function handleMenuCommand(session: WhatsAppSession, body: string): Promise<string> {
   const lower = body.toLowerCase().trim();
 
-  if (lower === '1') return handleHealthSummary(session);
-  if (lower === '2') return handleMedications(session);
-  if (lower === '3') return handleLabResults(session);
-  if (lower === '4') {
+  // List picker item names (from Content Template)
+  if (lower === '1' || lower === 'health summary')      return handleHealthSummary(session);
+  if (lower === '2' || lower === 'active medications')  return handleMedications(session);
+  if (lower === '3' || lower === 'lab results')         return handleLabResults(session);
+  if (lower === '4' || lower === 'upload document') {
     session.awaitingUpload = true;
-    return `📤 Ready to receive your document!\n\nSend a *photo* of your report or a *PDF file* now.`;
+    return `📤 Ready to receive your document!\n\nPlease send a *photo* of any medical report, prescription, or lab result.\n\nI'll extract and save all the details automatically using AI! 🤖`;
   }
-  if (lower === '5') return handleDrugInteractions(session);
+  if (lower === 'emergency card') return handleEmergencyRequest(session, session.phoneNumber);
+  if (lower === '5' || lower === 'drug interactions')   return handleDrugInteractions(session);
+  if (lower === '6' || lower === 'tip' || lower === 'tips') return getHealthTip(session);
+  if (lower === '7' || lower === 'vitals' || lower === 'bmi') return handleVitalsSummary(session);
 
-  const user = await UserModel.findById(session.userId);
-  const firstName = user?.name.split(' ')[0] || 'there';
-
-  return (
-    `👋 Hi ${firstName}! What can I help with?\n\n` +
-    `1️⃣ Health summary\n` +
-    `2️⃣ Current medications\n` +
-    `3️⃣ Recent lab results\n` +
-    `4️⃣ Upload a document\n` +
-    `5️⃣ Drug interactions\n\n` +
-    `Or just *ask me anything* about your health records!`
-  );
+  // Default — send the interactive native menu
+  setImmediate(async () => {
+    try { await sendWhatsAppMenu(session.phoneNumber); } catch { /* ignore */ }
+  });
+  return `👋 Opening your MedVault menu...`;
 }
 
 // ─── Menu sub-handlers ────────────────────────────────────────────────────────
@@ -469,6 +472,56 @@ async function handleDrugInteractions(session: WhatsAppSession): Promise<string>
   });
 
   lines.push(`⚕️ Always consult your doctor before changing medications.`);
+  return lines.join('\n');
+}
+
+// ─── Health tip (AI-generated based on user records) ─────────────────────────
+async function getHealthTip(session: WhatsAppSession): Promise<string> {
+  if (!session.userId) return `Link your account first to get personalised tips! Send *hi*.`;
+
+  const recentDoc = await DocumentModel.findOne({ userId: session.userId! })
+    .sort({ documentDate: -1 })
+    .select('summaryPlain conditionsMentioned tags');
+
+  const context = recentDoc
+    ? `Patient context: ${recentDoc.summaryPlain}. Conditions: ${recentDoc.conditionsMentioned?.join(', ')}`
+    : 'No records on file yet.';
+
+  const prompt = `You are a friendly health coach. Based on this patient's medical context, give ONE specific, actionable health tip for today. Keep it under 60 words. No markdown. Be warm and encouraging.\n\nContext: ${context}`;
+  const tip = await generateContent(prompt);
+
+  return `💡 *Today's Health Tip*\n\n${tip.trim()}\n\n_Send *tip* anytime for a new tip!_`;
+}
+
+// ─── Vitals summary from lab reports ─────────────────────────────────────────
+async function handleVitalsSummary(session: WhatsAppSession): Promise<string> {
+  if (!session.userId) return `Link your account first. Send *hi*.`;
+
+  const labs = await DocumentModel.find({
+    userId: session.userId!,
+    documentType: 'lab_report',
+    'labValues.0': { $exists: true },
+  }).sort({ documentDate: -1 }).limit(3);
+
+  if (!labs.length) {
+    return `No lab reports with vitals found yet.\n\nSend me a photo of a lab report to get started!`;
+  }
+
+  const lines = [`🩺 *Your Recent Vitals*`, ``];
+
+  labs.forEach((lab) => {
+    const date = lab.documentDate
+      ? new Date(lab.documentDate).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+      : 'Unknown';
+    lines.push(`📅 *${date}*`);
+    (lab.labValues ?? []).slice(0, 5).forEach((v) => {
+      const flag = v.is_abnormal ? ' ⚠️' : ' ✅';
+      lines.push(`• ${v.test_name}: ${v.value} ${v.unit}${flag}`);
+    });
+    lines.push(``);
+  });
+
+  lines.push(`_Ask me about any specific value!_`);
   return lines.join('\n');
 }
 
