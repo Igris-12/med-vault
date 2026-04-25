@@ -17,6 +17,7 @@ import chatRoutes from './routes/chat.js';
 import emergencyRoutes from './routes/emergency.js';
 import usersRoutes from './routes/users.js';
 import whatsappRoutes from './routes/whatsapp.js';
+import aiGraphRoutes from './routes/aiGraph.js';
 
 dotenv.config();
 
@@ -77,6 +78,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/ai/graph', aiGraphRoutes);
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
 app.use((_req, res) => {
