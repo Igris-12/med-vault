@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import SupportSessionModel from '../models/SupportSession.js';
+import { queryText } from '../services/aiClient.js';
 
 // ─── Get or create a support session ─────────────────────────────────────────
 export const getSupportSession = async (req: Request, res: Response): Promise<void> => {
@@ -11,7 +12,6 @@ export const getSupportSession = async (req: Request, res: Response): Promise<vo
     if (!session) {
       session = await SupportSessionModel.create({ sessionId, userId, messages: [] });
     } else if (userId && !session.userId) {
-      // Associate with user if now logged in
       session.userId = userId;
       await session.save();
     }
@@ -23,8 +23,6 @@ export const getSupportSession = async (req: Request, res: Response): Promise<vo
 };
 
 // ─── Post a message to support chat ──────────────────────────────────────────
-// The Gemini scraper team will hook into this endpoint. For now, it stores the
-// user message and returns a placeholder reply that the scraper can replace.
 export const postSupportMessage = async (req: Request, res: Response): Promise<void> => {
   try {
     const sessionId = String(req.params.sessionId);
@@ -45,10 +43,17 @@ export const postSupportMessage = async (req: Request, res: Response): Promise<v
     const userMsg = { role: 'user' as const, content: content.trim(), timestamp: new Date() };
     session.messages.push(userMsg);
 
-    // ── Placeholder reply — Gemini scraper will replace this logic ────────────
-    // The scraper can PATCH this endpoint or add its own endpoint to update the
-    // last message. We emit a Socket.IO event so the client updates in real-time.
-    const reply = buildPlaceholderReply(content.trim());
+    // ── Generate AI reply via Gemini Web scraper ────────────────────────────
+    let reply: string;
+    try {
+      const context = session.messages.slice(-6).map(m => `${m.role}: ${m.content}`).join('\n');
+      const prompt = `You are MedVault's friendly support assistant. MedVault is a medical records management platform with features: document upload & AI extraction, WhatsApp integration, medication reminders, AI chat, diet analysis, prescription tracking, lab result trends, and emergency cards.\n\nConversation so far:\n${context}\n\nRespond helpfully and concisely. Use markdown bold (**text**) for emphasis. Keep responses under 150 words.`;
+      reply = await queryText(prompt);
+    } catch (err) {
+      console.warn('AI scraper unavailable, using fallback:', err);
+      reply = buildPlaceholderReply(content.trim());
+    }
+
     const assistantMsg = { role: 'assistant' as const, content: reply, timestamp: new Date() };
     session.messages.push(assistantMsg);
 

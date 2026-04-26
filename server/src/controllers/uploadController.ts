@@ -4,7 +4,6 @@ import path from 'path';
 import DocumentModel from '../models/Document.js';
 import { io } from '../index.js';
 import { extractDocumentQueued, generateEmbedding, extractPrescriptionWithBBoxes } from '../services/geminiService.js';
-import { extractDocumentQueued, generateEmbedding } from '../services/geminiService.js';
 import { uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 
 export const handleUpload = async (req: Request, res: Response): Promise<void> => {

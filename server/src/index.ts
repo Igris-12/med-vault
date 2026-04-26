@@ -19,8 +19,10 @@ import emergencyRoutes from './routes/emergency.js';
 import usersRoutes from './routes/users.js';
 import whatsappRoutes from './routes/whatsapp.js';
 import supportRoutes from './routes/support.js';
+import dietRoutes from './routes/diet.js';
 import { startAllCronJobs } from './services/reminderCronService.js';
 import aiGraphRoutes from './routes/aiGraph.js';
+import doctorRoutes from './routes/doctor.js';
 
 dotenv.config();
 
@@ -95,7 +97,9 @@ app.use('/api/emergency', emergencyRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/diet', dietRoutes);
 app.use('/api/ai/graph', aiGraphRoutes);
+app.use('/api/doctor', doctorRoutes);
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
 app.use((_req, res) => {

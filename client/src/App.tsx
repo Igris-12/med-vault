@@ -4,6 +4,7 @@ import { SideNav } from './components/shared/SideNav';
 import { TopNav } from './components/shared/TopNav';
 import { CardSkeleton } from './components/shared/Skeleton';
 import { useAuth } from './context/AuthContext';
+import { FloatingChatbot } from './components/shared/FloatingChatbot';
 
 const Landing       = lazy(() => import('./pages/Landing'));
 const Dashboard     = lazy(() => import('./pages/Dashboard'));
@@ -12,10 +13,11 @@ const Records       = lazy(() => import('./pages/Records'));
 const Prescriptions = lazy(() => import('./pages/Prescriptions'));
 const Chat          = lazy(() => import('./pages/Chat'));
 const Upload        = lazy(() => import('./pages/Upload'));
-// ── New feature pages ─────────────────────────────────────────────────────
+// ── New feature pages ──────────────────────────────────────────────────────────
 const Alerts        = lazy(() => import('./pages/Alerts'));
 const Locator       = lazy(() => import('./pages/Locator'));
-// ── WA Reminder Module ────────────────────────────────────────────────────
+const WhatsAppConnect = lazy(() => import('./pages/WhatsAppConnect'));
+// ── WA Reminder Module ────────────────────────────────────────────────────────────
 const WALanding     = lazy(() => import('./pages/reminders/WALanding'));
 const WADashboard   = lazy(() => import('./pages/reminders/WADashboard'));
 const WASchedule    = lazy(() => import('./pages/reminders/WASchedule'));
@@ -24,6 +26,8 @@ const WASettings    = lazy(() => import('./pages/reminders/WASettings'));
 const PatientGraphVisualization = lazy(() => import('./pages/PatientGraphVisualization'));
 const CalendarPage = lazy(() => import('./pages/Calendar'));
 const DietAnalysis = lazy(() => import('./pages/DietAnalysis'));
+const DoctorDashboard = lazy(() => import('./pages/doctor/DoctorDashboard'));
+const PatientDetail  = lazy(() => import('./pages/doctor/PatientDetail'));
 
 function PageFallback() {
   return (
@@ -58,6 +62,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         )}
       </main>
+      <FloatingChatbot />
     </div>
   );
 }
@@ -84,7 +89,8 @@ export default function App() {
                 <Route path="upload"              element={<Upload />} />
                 <Route path="alerts"              element={<Alerts />} />
                 <Route path="locator"             element={<Locator />} />
-                <Route path="calendar"             element={<CalendarPage />} />
+                <Route path="calendar"            element={<CalendarPage />} />
+                <Route path="whatsapp"            element={<WhatsAppConnect />} />
                 <Route path="reminders/dashboard" element={<WADashboard />} />
                 <Route path="reminders/schedule"  element={<WASchedule />} />
                 <Route path="reminders/activity"  element={<WAActivity />} />
@@ -92,6 +98,9 @@ export default function App() {
                 <Route path="diet"                element={<DietAnalysis />} />
                 <Route path="clinician/graph/patient/:id" element={<PatientGraphVisualization />} />
                 <Route path="symptom-graph"              element={<PatientGraphVisualization />} />
+                <Route path="doctor/dashboard"           element={<DoctorDashboard />} />
+                <Route path="doctor/patients"            element={<DoctorDashboard />} />
+                <Route path="doctor/patients/:id"        element={<PatientDetail />} />
                 <Route path="reminders"           element={<Navigate to="reminders/dashboard" replace />} />
                 <Route path="*"                   element={<Navigate to="dashboard" replace />} />
               </Routes>

@@ -10,7 +10,7 @@
  */
 
 import { embeddingModel } from '../config/gemini.js';
-import { queryText, queryImage } from './aiClient.js';
+import { queryText, queryImage, queryAudio } from './aiClient.js';
 import { Medication, LabValue } from '../types/api.js';
 
 // ContextBuilder is imported lazily inside functions to avoid circular deps
@@ -343,17 +343,15 @@ export async function generateContextualContent(
   });
 }
 
-// ─── Multilingual audio transcription (Gemini 2.5 Flash) ─────────────────────
+// ─── Multilingual audio transcription ────────────────────────────────────────
 // Handles any language. Used for WhatsApp voice messages (OGG, MP3, WAV, etc.)
+// Routed through ai/server.py Playwright proxy (/img endpoint).
 export async function transcribeAudio(
   audioBuffer: Buffer,
   mimeType: string,
   languageHint?: string
 ): Promise<{ transcription: string; detectedLanguage: string }> {
   return withRetry(async () => {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    const base64 = audioBuffer.toString('base64');
-
     const langInstruction = languageHint
       ? `The user's preferred language is ${languageHint}. `
       : '';
@@ -366,14 +364,10 @@ Return a JSON object with:
 
 Return ONLY valid JSON, no markdown, no preamble.`;
 
-    const result = await model.generateContent([
-      prompt,
-      { inlineData: { mimeType, data: base64 } },
-    ]);
-
-    const text = result.response.text().trim();
+    const text = await queryAudio(prompt, audioBuffer, mimeType);
+    const cleaned = stripJsonFences(text);
     try {
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(cleaned);
       return {
         transcription: parsed.transcription || text,
         detectedLanguage: parsed.detected_language || 'Unknown',
@@ -386,7 +380,7 @@ Return ONLY valid JSON, no markdown, no preamble.`;
 }
 
 // ─── processAudio — alias used by whatsappController audio handler ────────────
-// Sends audio buffer + custom prompt to Gemini 2.5 Flash Native Audio Dialog
+// Sends audio buffer + custom prompt through the ai/server.py proxy (/img).
 // Returns raw text (caller handles JSON parsing if needed)
 export async function processAudio(
   buffer: Buffer,
@@ -394,11 +388,7 @@ export async function processAudio(
   prompt: string
 ): Promise<string> {
   return withRetry(async () => {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    const result = await model.generateContent([
-      prompt,
-      { inlineData: { mimeType, data: buffer.toString('base64') } },
-    ]);
-    return result.response.text().trim();
+    const text = await queryImage(prompt, buffer, mimeType);
+    return text.trim();
   });
 }

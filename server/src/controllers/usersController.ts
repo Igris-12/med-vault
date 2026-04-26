@@ -91,7 +91,19 @@ export const linkWhatsApp = async (req: Request, res: Response): Promise<void> =
         e164,
         `✅ MedVault connected!\n\nHi ${firstName}! Your health assistant is ready.\n\nSend *menu* to see what I can do, or just ask me anything about your records.`
       );
-    } catch (err) {
+    } catch (err: any) {
+      // Twilio sandbox: unregistered numbers get a specific error
+      const errMsg = err?.message || String(err);
+      if (errMsg.includes('unregistered') || errMsg.includes('21608') || errMsg.includes('not a valid')) {
+        console.warn('WhatsApp: number not registered in sandbox:', e164);
+        // Still save the number but warn the user
+        res.json({
+          success: true,
+          data: { whatsappPhone: e164 },
+          warning: 'Number saved, but the WhatsApp confirmation failed. Make sure this number has joined the Twilio sandbox by sending "join <keyword>" to +14155238886 first.',
+        });
+        return;
+      }
       console.warn('WhatsApp welcome message failed:', err);
     }
 
@@ -102,3 +114,13 @@ export const linkWhatsApp = async (req: Request, res: Response): Promise<void> =
   }
 };
 
+export const regenerateEmergencyToken = async (req: Request, res: Response): Promise<void> => {
+  const newToken = uuidv4();
+  const user = await UserModel.findByIdAndUpdate(
+    req.user!.uid,
+    { $set: { emergencyToken: newToken } },
+    { returnDocument: 'after' }
+  );
+  if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return; }
+  res.json({ success: true, data: { emergencyToken: newToken } });
+};

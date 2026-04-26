@@ -115,20 +115,61 @@ export async function queryImage(
 }
 
 /**
+ * Send an audio file (as a Buffer) + text prompt to Gemini via the Playwright proxy.
+ * Uses the /audio endpoint which injects via DataTransfer (not clipboard paste).
+ * Returns the raw text response.
+ */
+export async function queryAudio(
+  prompt: string,
+  audioBuffer: Buffer,
+  mimeType: string,
+): Promise<string> {
+  const base64 = `data:${mimeType};base64,${audioBuffer.toString('base64')}`;
+
+  const result = await postJSON<AiServerResponse>(
+    `${AI_SERVER_URL}/audio`,
+    { query: prompt, audio: base64, mime_type: mimeType },
+  );
+
+  if (result.status !== 'success' || !result.response) {
+    throw new Error(`aiClient audio query failed: ${result.message ?? 'unknown error'}`);
+  }
+
+  return result.response;
+}
+
+/**
  * Health check — returns true if ai/server.py is reachable.
- * Can be called at server startup to emit a warning rather than failing silently.
+ * Uses the lightweight GET /health endpoint (no browser interaction needed).
  */
 export async function isAiServerHealthy(): Promise<boolean> {
-  try {
-    // The /receive endpoint with a trivial query is the lightest check we have.
-    // We use a short timeout so the Node server starts quickly either way.
-    await postJSON<AiServerResponse>(
-      `${AI_SERVER_URL}/receive`,
-      { query: 'ping' },
-      5_000,
+  return new Promise((resolve) => {
+    const parsed = new URL(`${AI_SERVER_URL}/health`);
+    const isHttps = parsed.protocol === 'https:';
+    const transport = isHttps ? https : http;
+
+    const req = transport.get(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port || (isHttps ? 443 : 80),
+        path: '/health',
+        timeout: 5_000,
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (c) => { data += c; });
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data) as { status: string };
+            resolve(json.status === 'ok');
+          } catch {
+            resolve(false);
+          }
+        });
+      }
     );
-    return true;
-  } catch {
-    return false;
-  }
+
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+    req.on('error', () => resolve(false));
+  });
 }

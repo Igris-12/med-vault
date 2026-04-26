@@ -4,6 +4,7 @@ import { Bell, Settings, Command, LogOut, User, Clock, X } from 'lucide-react';
 import { useAppTheme } from '../../context/ThemeStateContext';
 import { THEMES, applyThemeVars } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 
 /* ─── Shared dropdown panel ─── */
 const Panel = ({ children, style = {} }: { children: React.ReactNode; style?: React.CSSProperties }) => (
@@ -30,14 +31,11 @@ const PAGE_TITLES: Record<string, string> = {
   '/app/reminders/schedule':  'Schedule',
   '/app/reminders/activity':  'Activity',
   '/app/reminders/settings':  'Settings',
+  '/app/doctor/dashboard':    'Doctor Portal',
+  '/app/doctor/patients':     'All Patients',
 };
 
-const MOCK_NOTIFS = [
-  { id: 1, icon: '✅', title: 'Reminder Delivered', desc: 'Team standup reminder sent', time: '2m ago', read: false },
-  { id: 2, icon: '⏰', title: 'Upcoming Reminder',  desc: 'Gym session in 15 minutes',  time: '10m ago', read: false },
-  { id: 3, icon: '❌', title: 'Delivery Failed',    desc: 'Call Mom — number unreachable', time: '1h ago',  read: true },
-  { id: 4, icon: '📋', title: 'New Reminder Set',   desc: 'Project deadline scheduled',  time: '2h ago',  read: true },
-];
+
 
 /* ─── Live clock ─── */
 function LiveClock() {
@@ -56,8 +54,7 @@ export function TopNav() {
   const location  = useLocation();
   const navigate  = useNavigate();
 
-  const [activeTheme, setActiveTheme] = useState(theme.id);
-  const [notifs,      setNotifs]      = useState(MOCK_NOTIFS);
+  const { notifications, unreadCount, markAllRead } = useSocket();
   const [showTheme,   setShowTheme]   = useState(false);
   const [showNotifs,  setShowNotifs]  = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -67,7 +64,7 @@ export function TopNav() {
   const profileRef = useRef<HTMLDivElement>(null);
 
   const pageTitle = PAGE_TITLES[location.pathname] ?? '';
-  const unread    = notifs.filter(n => !n.read).length;
+  const unread    = unreadCount;
 
   /* Close on outside click */
   useEffect(() => {
@@ -80,8 +77,8 @@ export function TopNav() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  /* Sync with context */
   useEffect(() => { setActiveTheme(theme.id); }, [theme.id]);
+  const [activeTheme, setActiveTheme] = useState(theme.id);
 
   const handleApplyTheme = (t: typeof THEMES[0]) => {
     applyThemeVars(t);
@@ -205,9 +202,13 @@ export function TopNav() {
                 </button>
               </div>
               <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-                {notifs.map(n => (
+                {notifications.length === 0 && (
+                  <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--dd-text-dim)', fontSize: 12 }}>
+                    No notifications yet
+                  </div>
+                )}
+                {notifications.map(n => (
                   <div key={n.id}
-                    onClick={() => setNotifs(p => p.map(x => x.id === n.id ? { ...x, read: true } : x))}
                     style={{
                       display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 16px',
                       cursor: 'pointer', borderBottom: '1px solid var(--dd-border)',
@@ -216,20 +217,17 @@ export function TopNav() {
                     onMouseEnter={e => { e.currentTarget.style.background = 'var(--dd-hover-overlay)'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                   >
-                    <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>{n.icon}</span>
+                    <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>{n.type === 'document' ? '📄' : n.type === 'reminder' ? '💊' : '🔔'}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--dd-text)', fontFamily: 'Inter, system-ui, sans-serif' }}>{n.title}</div>
-                      <div style={{ fontSize: 11, color: 'var(--dd-text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.desc}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--dd-text)', fontFamily: 'Inter, system-ui, sans-serif' }}>{n.message}</div>
+                      <div style={{ fontSize: 10, color: 'var(--dd-text-dim)', marginTop: 2, fontFamily: 'monospace' }}>{new Date(n.timestamp).toLocaleTimeString()}</div>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                      <span style={{ fontSize: 10, color: 'var(--dd-text-dim)', fontFamily: 'monospace' }}>{n.time}</span>
-                      {!n.read && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--dd-accent)' }} />}
-                    </div>
+                    {!n.read && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--dd-accent)', marginTop: 4 }} />}
                   </div>
                 ))}
               </div>
               <div style={{ padding: '10px 16px', textAlign: 'center', borderTop: '1px solid var(--dd-border)' }}>
-                <button onClick={() => setNotifs(p => p.map(x => ({ ...x, read: true })))}
+                <button onClick={() => markAllRead()}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--dd-accent)', fontFamily: 'Inter, system-ui, sans-serif' }}>
                   Mark all as read
                 </button>
@@ -256,11 +254,17 @@ export function TopNav() {
             <div
               className={`nav-icon-btn ${showProfile ? 'active' : ''}`}
               style={{
-                background: `linear-gradient(135deg, var(--dd-accent), #7c3aed)`,
+                background: user?.photoURL ? 'transparent' : `linear-gradient(135deg, var(--dd-accent), #7c3aed)`,
+                padding: user?.photoURL ? 0 : undefined,
+                overflow: 'hidden',
                 color: '#fff', fontWeight: 700, fontSize: 13,
                 fontFamily: 'Inter, system-ui, sans-serif',
               }}>
-              A
+              {user?.photoURL ? (
+                <img src={user.photoURL} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+              ) : (
+                (user?.displayName || user?.email || 'U').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || 'U'
+              )}
             </div>
           </button>
 

@@ -8,28 +8,32 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { auth } from '../config/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const IS_DEV   = import.meta.env.DEV;
 
+// ─── Auth-ready promise ───────────────────────────────────────────────────────
+// Firebase auth state is async. On page load, auth.currentUser is null for
+// a brief moment before the persisted session is restored. All API hooks
+// call getAuthToken() immediately, so without this guard they fire with an
+// empty token and get 401'd. This promise resolves once auth state is known.
+let _authReadyResolve: (() => void) | null = null;
+const _authReady = new Promise<void>((resolve) => { _authReadyResolve = resolve; });
+onAuthStateChanged(auth, () => { _authReadyResolve?.(); });
+
 // ─── Auth token helper ────────────────────────────────────────────────────────
-/**
- * Always fetches a fresh Firebase ID token via the SDK.
- * Firebase auto-refreshes expired tokens transparently — no manual caching needed.
- * Falls back to the dev-bypass token when there's no logged-in user in local dev.
- */
 export async function getAuthToken(): Promise<string> {
   // Mock mode: bypass Firebase entirely
   if (import.meta.env.VITE_USE_MOCK === 'true') return 'dev-bypass-token';
 
+  // Wait until Firebase has restored the persisted session (max ~2s on cold load)
+  await _authReady;
+
   const currentUser = auth.currentUser;
   if (currentUser) {
-    // forceRefresh=false: returns cached token if still valid, refreshes if expired
     return currentUser.getIdToken(false);
   }
-
-  // No Firebase user — use dev bypass only in development
-  if (IS_DEV) return 'dev-bypass-token';
 
   return '';
 }
@@ -57,6 +61,21 @@ export async function apiFetch<T>(
   const json = await res.json();
   return json.data as T;
 }
+
+// ─── Raw fetch with auth (returns Response, not parsed data) ──────────────────
+// Use this when you need to inspect the full response or handle errors manually
+export async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const token = await getAuthToken();
+  return fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...options.headers,
+    },
+  });
+}
+
 
 // ─── Generic data fetching hook ───────────────────────────────────────────────
 export function useApiData<T>(

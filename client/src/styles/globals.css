@@ -211,8 +211,8 @@
      SIDE NAV BUTTONS
   ───────────────────────────────────────────────────── */
   .side-nav-item {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px 12px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    padding: 10px; border-radius: 12px;
     border: 2.5px solid transparent;
     transition: transform 0.25s, background 0.25s, border-color 0.25s;
     cursor: pointer;

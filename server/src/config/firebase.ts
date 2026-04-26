@@ -1,11 +1,6 @@
 import admin from 'firebase-admin';
 
 if (!admin.apps.length) {
-  if (process.env.NODE_ENV === 'development') {
-    // In dev: initialize with the real project ID so verifyIdToken attempts
-    // the correct issuer check. If it still fails (no private key), auth.ts
-    // will fall back to JWT payload decoding automatically.
-
   const projectId = process.env.FIREBASE_PROJECT_ID || 'medvault-4bbdc';
 
   if (process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL &&
@@ -26,3 +21,4 @@ if (!admin.apps.length) {
 }
 
 export default admin;
+

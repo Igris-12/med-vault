@@ -8,6 +8,7 @@ router.post('/sync', authMiddleware, usersController.syncUser);
 router.get('/profile', authMiddleware, usersController.getProfile);
 router.put('/profile', authMiddleware, usersController.updateProfile);
 router.post('/link-whatsapp', authMiddleware, usersController.linkWhatsApp);
+router.post('/regenerate-token', authMiddleware, usersController.regenerateEmergencyToken);
 
 export default router;
 

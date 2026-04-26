@@ -6,8 +6,8 @@ import { DocumentCard } from '../components/shared/DocumentCard';
 import { ModeToggle } from '../components/shared/ModeToggle';
 import { CardSkeleton, EmptyState, ErrorState } from '../components/shared/Skeleton';
 import { useMode } from '../context/ModeContext';
+import { useAuth } from '../context/AuthContext';
 import type { MedDocument, Anomaly, TimelineMonth } from '../types/api';
-import { MOCK_USER } from '../mock';
 
 function StatCard({ icon, value, label, color = 'text-teal' }: {
   icon: string; value: string | number; label: string; color?: string;
@@ -84,6 +84,11 @@ export default function Dashboard() {
   const { data: docsResult, loading: dLoading } = useDocuments({ limit: 3 });
   const { data: timeline } = useTimeline();
   const [selectedDoc, setSelectedDoc] = useState<MedDocument | null>(null);
+  const { user } = useAuth();
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const firstName = (user?.displayName || user?.email?.split('@')[0] || 'there').split(' ')[0];
 
   const stats = summary ? [
     { icon: '📄', value: summary.totalDocuments, label: 'Total Documents', color: 'text-teal' },
@@ -98,7 +103,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-sans font-bold text-2xl text-text-primary">
-            Good morning, {MOCK_USER.name.split(' ')[0]} 👋
+            {greeting}, {firstName} 👋
           </h1>
           <p className="font-body text-sm text-text-muted mt-1">
             {hoveredMonth ? `Viewing ${hoveredMonth.month}` : 'Your health command center'}

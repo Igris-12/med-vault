@@ -11,9 +11,8 @@ import {
   transcribeAudio,
 } from '../services/geminiService.js';
 import { buildUserContext, buildLightContext, assemblePrompt } from '../services/contextBuilder.js';
-import { sendWhatsAppMessage, sendWhatsAppMenu } from '../services/whatsappService.js';
-import { findTopK } from '../services/vectorService.js';
 import { sendWhatsAppMessage, sendWhatsAppMenu, sendEmergencyTemplate } from '../services/whatsappService.js';
+import { findTopK } from '../services/vectorService.js';
 import { uploadUrlToCloudinary, uploadBufferToCloudinary } from '../services/cloudinaryService.js';
 
 // ─── Session types ────────────────────────────────────────────────────────────
@@ -161,17 +160,14 @@ function isEmergencyKeyword(body: string): boolean {
 
 function isMenuCommand(body: string): boolean {
   const lower = body.toLowerCase().trim();
-  const menuTriggers = [
+  const triggers = [
     'menu', 'hi', 'hello', 'start', 'back', 'home',
+    'namaste', 'namaskar',
     '1', '2', '3', '4', '5', '6', '7',
     'health summary', 'active medications', 'upload document', 'emergency card',
-    'tip', 'tips', 'appointment', 'appointments', 'vitals', 'bmi',
-
-  const triggers = [
-    'menu','hi','hello','start','back','home',
-    'namaste','namaskar',
-    '1','2','3','4',
-    'health tip','daily tip','tip','health summary','support','language','change language',
+    'tip', 'tips', 'health tip', 'daily tip',
+    'appointment', 'appointments', 'vitals', 'bmi',
+    'support', 'language', 'change language',
   ];
   return triggers.includes(lower);
 }
