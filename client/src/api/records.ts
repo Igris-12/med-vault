@@ -59,6 +59,14 @@ export function useDocument(id: string) {
 
 // ─── Upload ────────────────────────────────────────────────────────────────
 export async function uploadFiles(files: File[]): Promise<Array<{ docId: string; filename: string }>> {
+  if (USE_MOCK_DATA) {
+    // Simulate a 2-second upload delay
+    await new Promise((r) => setTimeout(r, 2000));
+    return files.map((f, i) => ({ docId: `mock-${Date.now()}-${i}`, filename: f.name }));
+  }
+  // Use the same live Firebase token as all other API calls (getAuthToken() auto-refreshes)
+  const { getAuthToken } = await import('./base');
+  const token = await getAuthToken();
   const formData = new FormData();
   files.forEach((f) => formData.append('files', f));
   const token = await getAuthToken();
@@ -67,6 +75,10 @@ export async function uploadFiles(files: File[]): Promise<Array<{ docId: string;
     headers: { Authorization: `Bearer ${token}` },
     body: formData,
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `Upload failed: ${res.status}`);
+  }
   const json = await res.json();
   return json.data;
 }

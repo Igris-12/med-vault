@@ -4,6 +4,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import path from 'path';
+import { execSync } from 'child_process';
 import { Server as SocketIOServer } from 'socket.io';
 
 import { connectDB } from './config/db.js';
@@ -133,12 +134,44 @@ const start = async () => {
     console.warn(`   Generation calls (chat, upload extraction, etc.) will fail until it starts.`);
   }
 
-  server.listen(PORT, () => {
-    console.log(`\n🚀 MedVault server running on http://localhost:${PORT}`);
-    console.log(`📡 Health check: http://localhost:${PORT}/api/health\n`);
-    // Start scheduled WhatsApp reminders
-    startAllCronJobs();
-  });
+  const listen = (retry = false) => {
+    server.listen(PORT, () => {
+      console.log(`\n🚀 MedVault server running on http://localhost:${PORT}`);
+      console.log(`📡 Health check: http://localhost:${PORT}/api/health\n`);
+      // Start scheduled WhatsApp reminders
+      startAllCronJobs();
+    });
+
+    server.once('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE' && !retry) {
+        console.warn(`\n⚠️  Port ${PORT} in use — killing the blocking process…`);
+        try {
+          const isWin = process.platform === 'win32';
+          if (isWin) {
+            const out = execSync(`netstat -ano | findstr :${PORT} | findstr LISTENING`, { encoding: 'utf-8' });
+            const pids = [...new Set(out.trim().split('\n').map(l => l.trim().split(/\s+/).pop()!).filter(Boolean))];
+            for (const pid of pids) {
+              console.log(`   Killing PID ${pid}…`);
+              try { execSync(`taskkill /F /PID ${pid}`, { encoding: 'utf-8' }); } catch {}
+            }
+          } else {
+            try { execSync(`lsof -ti :${PORT} | xargs kill -9`, { encoding: 'utf-8' }); } catch {}
+          }
+          console.log(`   Waiting 1s then retrying…\n`);
+          setTimeout(() => listen(true), 1000);
+        } catch (killErr) {
+          console.error('   Could not auto-kill. Please run manually:\n');
+          console.error(`   Windows:  netstat -ano | findstr :${PORT}  →  taskkill /F /PID <pid>`);
+          console.error(`   Mac/Linux: lsof -ti :${PORT} | xargs kill -9\n`);
+          process.exit(1);
+        }
+      } else {
+        throw err;
+      }
+    });
+  };
+
+  listen();
 };
 
 start().catch(console.error);
