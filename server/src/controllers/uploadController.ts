@@ -2,9 +2,24 @@ import { Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import DocumentModel from '../models/Document.js';
+import PrescriptionModel from '../models/Prescription.js';
 import { io } from '../index.js';
-import { extractDocumentQueued, generateEmbedding, extractPrescriptionWithBBoxes } from '../services/geminiService.js';
+import { extractDocumentQueued, generateEmbedding, checkInteractions } from '../services/geminiService.js';
 import { uploadBufferToCloudinary } from '../services/cloudinaryService.js';
+
+/** Parse a duration string (e.g. "7 days", "2 weeks", "1 month") and compute an end date. */
+function computeEndDate(startDateStr: string | null, duration: string): Date | undefined {
+  const start = startDateStr ? new Date(startDateStr) : new Date();
+  const lower = duration.toLowerCase();
+  const num = parseInt(lower) || 1;
+
+  if (lower.includes('day'))   { start.setDate(start.getDate() + num); return start; }
+  if (lower.includes('week'))  { start.setDate(start.getDate() + num * 7); return start; }
+  if (lower.includes('month')) { start.setMonth(start.getMonth() + num); return start; }
+  if (lower.includes('year'))  { start.setFullYear(start.getFullYear() + num); return start; }
+
+  return undefined;
+}
 
 export const handleUpload = async (req: Request, res: Response): Promise<void> => {
   const files = req.files as Express.Multer.File[];
@@ -92,12 +107,19 @@ async function processDocument(
 
       io.to(userId).emit('document:status', { docId, status: 'processing', step: 'embedding' });
 
+      // Safe defaults — AI may return incomplete JSON
+      const conditions = extracted.conditions_mentioned ?? [];
+      const tags = extracted.tags ?? [];
+      const meds = extracted.medications ?? [];
+      const labs = extracted.lab_values ?? [];
+      const findings = extracted.key_findings ?? [];
+
       const embeddingText = [
-        extracted.summary_plain,
-        extracted.summary_clinical,
-        extracted.conditions_mentioned.join(' '),
-        extracted.tags.join(' '),
-      ].join(' ');
+        extracted.summary_plain || '',
+        extracted.summary_clinical || '',
+        conditions.join(' '),
+        tags.join(' '),
+      ].filter(Boolean).join(' ');
 
       let embedding: number[] = [];
       try {
@@ -114,36 +136,73 @@ async function processDocument(
           status: 'done',
           processedAt: new Date(),
           filePath: cloudinaryUrl, // ensure Cloudinary URL is saved
-          documentType: extracted.document_type,
+          documentType: extracted.document_type || 'other',
           documentDate: extracted.document_date ? new Date(extracted.document_date) : undefined,
-          sourceHospital: extracted.source_hospital,
-          doctorName: extracted.doctor_name,
-          conditionsMentioned: extracted.conditions_mentioned,
-          medications: extracted.medications,
-          labValues: extracted.lab_values,
-          summaryPlain: extracted.summary_plain,
-          summaryClinical: extracted.summary_clinical,
-          criticalityScore: extracted.criticality_score,
-          keyFindings: extracted.key_findings,
-          tags: extracted.tags,
+          sourceHospital: extracted.source_hospital || '',
+          doctorName: extracted.doctor_name || '',
+          conditionsMentioned: conditions,
+          medications: meds,
+          labValues: labs,
+          summaryPlain: extracted.summary_plain || '',
+          summaryClinical: extracted.summary_clinical || '',
+          criticalityScore: extracted.criticality_score ?? 1,
+          keyFindings: findings,
+          tags,
           embedding,
         },
         { new: true, projection: { embedding: 0 } }
       );
 
-      // ── Prescription: second-pass bbox extraction ─────────────────────────────
-      // Only runs for image-type prescriptions; PDFs are skipped gracefully.
-      if (
-        extracted.document_type === 'prescription' &&
-        (mimeType.startsWith('image/'))
-      ) {
+      // ── Prescription: bbox extraction is done lazily when Prescription Viewer opens.
+      // No second AI call needed here.
+
+
+      // ── Auto-create Prescription records when document is a prescription ─────
+      if ((extracted.document_type || 'other') === 'prescription' && meds.length > 0) {
         try {
-          const bboxData = await extractPrescriptionWithBBoxes(buffer, mimeType);
-          if (bboxData) {
-            await DocumentModel.findByIdAndUpdate(docId, { prescriptionExtraction: bboxData });
+          const createdPrescriptions = await Promise.all(
+            meds.map((med) =>
+              PrescriptionModel.create({
+                userId,
+                drugName: med.name,
+                dosage: med.dosage || 'As directed',
+                frequency: med.frequency || 'As directed',
+                prescribingDoctor: extracted.doctor_name || 'Unknown',
+                startDate: extracted.document_date ? new Date(extracted.document_date) : new Date(),
+                endDate: med.duration ? computeEndDate(extracted.document_date, med.duration) : undefined,
+                status: 'active',
+                sourceDocumentId: docId,
+                interactionWarnings: [],
+                interactionSeverity: 'none',
+              })
+            )
+          );
+          console.log(`💊 Created ${createdPrescriptions.length} prescription records from document ${docId}`);
+
+          // Check drug interactions across all active prescriptions
+          const allActive = await PrescriptionModel.find({ userId, status: 'active' });
+          if (allActive.length >= 2) {
+            const drugNames = allActive.map((p: any) => p.drugName);
+            try {
+              const interactions = await checkInteractions(drugNames);
+              for (const interaction of interactions) {
+                const affected = allActive.filter(
+                  (p: any) => p.drugName === interaction.drug1 || p.drugName === interaction.drug2
+                );
+                for (const p of affected) {
+                  const warning = `Interaction with ${p.drugName === interaction.drug1 ? interaction.drug2 : interaction.drug1}: ${interaction.description}`;
+                  await PrescriptionModel.findByIdAndUpdate(p._id, {
+                    $addToSet: { interactionWarnings: warning },
+                    interactionSeverity: interaction.severity,
+                  });
+                }
+              }
+            } catch (intErr) {
+              console.warn('Drug interaction check failed (non-blocking):', intErr);
+            }
           }
-        } catch (e) {
-          console.warn('Prescription bbox extraction failed (non-blocking):', e);
+        } catch (prescErr) {
+          console.warn('Prescription record creation failed (non-blocking):', prescErr);
         }
       }
 

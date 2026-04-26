@@ -37,6 +37,34 @@ _playwright_lock = threading.Lock()
 # Cached selector so we only detect once
 cached_selector = None
 
+
+def is_browser_alive():
+    """Quick check whether the Playwright page is still usable."""
+    try:
+        page.title()  # lightweight call — throws if connection is dead
+        return True
+    except Exception:
+        return False
+
+
+def reconnect_browser():
+    """Tear down the dead browser and re-launch from scratch."""
+    global playwright, browser, page, cached_selector
+    print("\n🔄 Browser connection lost — reconnecting…")
+    cached_selector = None
+    # Try to close gracefully
+    try:
+        browser.close()
+    except Exception:
+        pass
+    try:
+        playwright.stop()
+    except Exception:
+        pass
+    # Re-init
+    init_page()
+    print("✅ Browser reconnected!\n")
+
 # MIME type → file extension mapping
 MIME_EXTENSIONS = {
     "image/jpeg": ".jpg",
@@ -262,27 +290,41 @@ def receive_request():
     data = request.get_json(force=True)
     query = data.get("query")
 
-    with _playwright_lock:
-        textbox = find_textbox()
-        if textbox is None:
-            return jsonify({"status": "error", "message": "Could not find input box"}), 500
+    for attempt in range(2):  # retry once after reconnect
+        with _playwright_lock:
+            if attempt > 0 or not is_browser_alive():
+                reconnect_browser()
 
-        textbox.click()
-        time.sleep(0.3)
-        textbox.fill(query)
-        time.sleep(0.3)
-        textbox.press("Enter")
+            try:
+                textbox = find_textbox()
+                if textbox is None:
+                    return jsonify({"status": "error", "message": "Could not find input box"}), 500
 
-        page.wait_for_selector(
-            '.text-input-field >> xpath=preceding::span[contains(@class, "user-query-bubble-with-background")][1]/following::div[@data-test-lottie-animation-status="completed"][1]',
-            timeout=600000
-        )
+                textbox.click()
+                time.sleep(0.3)
+                textbox.fill(query)
+                time.sleep(0.3)
+                textbox.press("Enter")
 
-        locater = page.locator('xpath=(//div[contains(@class, "text-input-field")])[1]/preceding::message-content[1]')
-        locater.wait_for(timeout=600000)
-        response = locater.inner_text()
+                page.wait_for_selector(
+                    '.text-input-field >> xpath=preceding::span[contains(@class, "user-query-bubble-with-background")][1]/following::div[@data-test-lottie-animation-status="completed"][1]',
+                    timeout=600000
+                )
 
-    return jsonify({"status": "success", "response": response})
+                locater = page.locator('xpath=(//div[contains(@class, "text-input-field")])[1]/preceding::message-content[1]')
+                locater.wait_for(timeout=600000)
+                response = locater.inner_text()
+
+                return jsonify({"status": "success", "response": response})
+
+            except Exception as e:
+                err_msg = str(e).lower()
+                if 'connection closed' in err_msg or 'target closed' in err_msg or 'browser has been closed' in err_msg:
+                    print(f"⚠️  Browser connection lost (attempt {attempt+1}): {e}")
+                    if attempt == 0:
+                        continue  # retry after reconnect
+                print(f"❌ Error in /receive: {e}")
+                return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route('/img', methods=['POST'])
@@ -295,11 +337,11 @@ def receive_img():
     if not base64_image:
         return jsonify({"status": "error", "message": "No file provided"}), 400
 
-    # ── 1. Save base64 image to a temp file ───────────────────────────────────
+    # ── 1. Save base64 to a temp file ─────────────────────────────────────────
     ext        = MIME_EXTENSIONS.get(mime_type.lower(), ".bin")
     timestamp  = int(time.time() * 1000)
     image_path = os.path.join(UPLOAD_FOLDER, f"upload_{timestamp}{ext}")
-    png_path   = None   # clipboard-ready PNG (created if original is WebP/GIF/etc.)
+    png_path   = None
 
     try:
         raw_b64   = base64_image.split(",")[1] if "," in base64_image else base64_image
@@ -310,78 +352,152 @@ def receive_img():
     except Exception as e:
         return jsonify({"status": "error", "message": f"Failed to decode/save file: {str(e)}"}), 400
 
+    is_image = mime_type.lower().startswith("image/")
+
     try:
-        # ── 2. Convert to PNG via Pillow ───────────────────────────────────────
-        # Windows System.Drawing does NOT support WebP/GIF/AVIF.
-        # Pillow converts any format → RGB PNG that SetImage() can always handle.
-        png_path = os.path.join(UPLOAD_FOLDER, f"upload_{timestamp}_cb.png")
-        try:
-            with PILImage.open(image_path) as img:
-                if img.mode in ('RGBA', 'LA', 'P', 'PA'):
-                    img = img.convert('RGB')
-                img.save(png_path, 'PNG')
-            clipboard_path = os.path.abspath(png_path).replace("\\", "\\\\")
-            print(f"🔄 Converted to PNG for clipboard: {png_path}")
-        except Exception as conv_err:
-            print(f"⚠️  PNG conversion failed ({conv_err}), using original")
-            clipboard_path = os.path.abspath(image_path).replace("\\", "\\\\")
+        if is_image:
+            # ── IMAGE PATH: clipboard paste ───────────────────────────────────
+            png_path = os.path.join(UPLOAD_FOLDER, f"upload_{timestamp}_cb.png")
+            try:
+                with PILImage.open(image_path) as img:
+                    if img.mode in ('RGBA', 'LA', 'P', 'PA'):
+                        img = img.convert('RGB')
+                    img.save(png_path, 'PNG')
+                clipboard_path = os.path.abspath(png_path).replace("\\", "\\\\")
+                print(f"🔄 Converted to PNG for clipboard: {png_path}")
+            except Exception as conv_err:
+                print(f"⚠️  PNG conversion failed ({conv_err}), using original")
+                clipboard_path = os.path.abspath(image_path).replace("\\", "\\\\")
 
-        with _playwright_lock:
-            textbox = find_textbox()
-            if textbox is None:
-                return jsonify({"status": "error", "message": "Could not find input box"}), 500
+            for attempt in range(2):
+                with _playwright_lock:
+                    if attempt > 0 or not is_browser_alive():
+                        reconnect_browser()
 
-            # ── 3. Copy PNG to Windows clipboard via PowerShell (-STA required) ─
-            ps_cmd = (
-                "Add-Type -AssemblyName System.Windows.Forms; "
-                "Add-Type -AssemblyName System.Drawing; "
-                f"$img = [System.Drawing.Image]::FromFile('{clipboard_path}'); "
-                "[System.Windows.Forms.Clipboard]::SetImage($img); "
-                "$img.Dispose()"
-            )
-            ps_result = subprocess.run(
-                ["powershell", "-STA", "-Command", ps_cmd],
-                capture_output=True, text=True, timeout=15
-            )
-            if ps_result.returncode != 0:
-                print(f"⚠️  PowerShell clipboard error: {ps_result.stderr}")
-            else:
-                print("📋 Image copied to Windows clipboard")
+                    try:
+                        textbox = find_textbox()
+                        if textbox is None:
+                            return jsonify({"status": "error", "message": "Could not find input box"}), 500
 
-            time.sleep(0.5)
+                        ps_cmd = (
+                            "Add-Type -AssemblyName System.Windows.Forms; "
+                            "Add-Type -AssemblyName System.Drawing; "
+                            f"$img = [System.Drawing.Image]::FromFile('{clipboard_path}'); "
+                            "[System.Windows.Forms.Clipboard]::SetImage($img); "
+                            "$img.Dispose()"
+                        )
+                        ps_result = subprocess.run(
+                            ["powershell", "-STA", "-Command", ps_cmd],
+                            capture_output=True, text=True, timeout=15
+                        )
+                        if ps_result.returncode != 0:
+                            print(f"⚠️  PowerShell clipboard error: {ps_result.stderr}")
+                        else:
+                            print("📋 Image copied to Windows clipboard")
 
-            # ── 4. Paste image into Gemini via Ctrl+V (no file dialog!) ────────
-            textbox.click()
-            time.sleep(0.3)
-            page.keyboard.press("Control+v")   # pastes the clipboard image
-            time.sleep(2.5)                    # wait for Gemini to show thumbnail
+                        time.sleep(0.5)
+                        textbox.click()
+                        time.sleep(0.3)
+                        page.keyboard.press("Control+v")
+                        time.sleep(2.5)
 
-            # ── 5. Type the prompt — CRITICAL: strip newlines ─────────────────
-            # page.keyboard.type() sends literal Enter for each \n in the string,
-            # which submits the Gemini form mid-prompt and splits the message!
-            safe_query = query.replace('\n', ' ').replace('\r', ' ').strip()
-            page.keyboard.type(safe_query)
-            time.sleep(0.3)
-            page.keyboard.press("Enter")
+                        safe_query = query.replace('\n', ' ').replace('\r', ' ').strip()
+                        page.keyboard.type(safe_query)
+                        time.sleep(0.3)
+                        page.keyboard.press("Enter")
 
-            # ── 6. Wait for Gemini's response ──────────────────────────────────
-            page.wait_for_selector(
-                '.text-input-field >> xpath=preceding::span[contains(@class, "user-query-bubble-with-background")][1]/following::div[@data-test-lottie-animation-status="completed"][1]',
-                timeout=600000
-            )
+                        page.wait_for_selector(
+                            '.text-input-field >> xpath=preceding::span[contains(@class, "user-query-bubble-with-background")][1]/following::div[@data-test-lottie-animation-status="completed"][1]',
+                            timeout=600000
+                        )
+                        locater = page.locator('xpath=(//div[contains(@class, "text-input-field")])[1]/preceding::message-content[1]')
+                        locater.wait_for(timeout=600000)
+                        response_text = locater.inner_text()
+                        return jsonify({"status": "success", "response": response_text})
 
-            locater = page.locator('xpath=(//div[contains(@class, "text-input-field")])[1]/preceding::message-content[1]')
-            locater.wait_for(timeout=600000)
-            response_text = locater.inner_text()
+                    except Exception as e:
+                        err_msg = str(e).lower()
+                        if 'connection closed' in err_msg or 'target closed' in err_msg or 'browser has been closed' in err_msg:
+                            print(f"⚠️  Browser connection lost in /img (attempt {attempt+1}): {e}")
+                            if attempt == 0:
+                                continue
+                        print(f"❌ Error in /img: {e}")
+                        return jsonify({"status": "error", "message": str(e)}), 500
 
-        return jsonify({"status": "success", "response": response_text})
+        else:
+            # ── PDF / NON-IMAGE PATH: DataTransfer file input injection ────────
+            b64_for_js = base64.b64encode(file_data).decode()
+            filename = f"document{ext}"
+            print(f"📄 Using DataTransfer injection for {mime_type}")
 
-    except Exception as e:
-        print(f"❌ Error in /img: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+            for attempt in range(2):
+                with _playwright_lock:
+                    if attempt > 0 or not is_browser_alive():
+                        reconnect_browser()
+
+                    try:
+                        textbox = find_textbox()
+                        if textbox is None:
+                            return jsonify({"status": "error", "message": "Could not find input box"}), 500
+
+                        inject_js = f"""
+                        async () => {{
+                            try {{
+                                const b64 = '{b64_for_js}';
+                                const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+                                const blob = new Blob([bytes], {{ type: '{mime_type}' }});
+                                const file = new File([blob], '{filename}', {{ type: '{mime_type}' }});
+                                const dt = new DataTransfer();
+                                dt.items.add(file);
+                                const inputs = document.querySelectorAll('input[type="file"]');
+                                const input = inputs[inputs.length - 1] || inputs[0];
+                                if (!input) return false;
+                                Object.defineProperty(input, 'files', {{
+                                    value: dt.files, configurable: true, writable: false,
+                                }});
+                                input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                input.dispatchEvent(new Event('input',  {{ bubbles: true }}));
+                                return true;
+                            }} catch(e) {{
+                                console.error('file inject error:', e);
+                                return false;
+                            }}
+                        }}
+                        """
+                        result = page.evaluate(inject_js)
+                        print(f"📎 File injected via DataTransfer: {result}")
+
+                        if not result:
+                            return jsonify({"status": "error", "message": "Failed to inject file into Gemini"}), 500
+
+                        time.sleep(3)
+
+                        textbox.click()
+                        time.sleep(0.3)
+                        safe_query = query.replace('\n', ' ').replace('\r', ' ').strip()
+                        page.keyboard.type(safe_query)
+                        time.sleep(0.3)
+                        page.keyboard.press("Enter")
+
+                        page.wait_for_selector(
+                            '.text-input-field >> xpath=preceding::span[contains(@class, "user-query-bubble-with-background")][1]/following::div[@data-test-lottie-animation-status="completed"][1]',
+                            timeout=600000
+                        )
+                        locater = page.locator('xpath=(//div[contains(@class, "text-input-field")])[1]/preceding::message-content[1]')
+                        locater.wait_for(timeout=600000)
+                        response_text = locater.inner_text()
+                        return jsonify({"status": "success", "response": response_text})
+
+                    except Exception as e:
+                        err_msg = str(e).lower()
+                        if 'connection closed' in err_msg or 'target closed' in err_msg or 'browser has been closed' in err_msg:
+                            print(f"⚠️  Browser connection lost in /img (attempt {attempt+1}): {e}")
+                            if attempt == 0:
+                                continue
+                        print(f"❌ Error in /img: {e}")
+                        return jsonify({"status": "error", "message": str(e)}), 500
 
     finally:
-        # Clean up both original and clipboard PNG
         for path in [image_path, png_path]:
             if path and os.path.exists(path):
                 try:

@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { ModeProvider } from './context/ModeContext';
 import { SocketProvider } from './context/SocketContext';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { Splash } from './components/shared/Splash';
 import { ThemeProvider } from './context/ThemeStateContext';
 
@@ -14,12 +14,24 @@ import './styles/globals.css';
 function Root() {
   const [showSplash, setShowSplash] = useState(true);
   const hideSplash = useCallback(() => setShowSplash(false), []);
-
   return (
     <>
       {showSplash && <Splash onDone={hideSplash} />}
       <App />
     </>
+  );
+}
+
+/**
+ * Reads the real Firebase UID after auth resolves and passes it to SocketProvider.
+ * Must be inside <AuthProvider> so useAuth() works.
+ */
+function AuthedSocketProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  return (
+    <SocketProvider userId={user?.uid}>
+      {children}
+    </SocketProvider>
   );
 }
 
@@ -29,7 +41,7 @@ createRoot(document.getElementById('root')!).render(
       <AuthProvider>
         <ThemeProvider>
           <ModeProvider>
-            <SocketProvider userId="dev-user-001">
+            <AuthedSocketProvider>
               <Root />
               <Toaster
                 position="bottom-right"
@@ -46,7 +58,7 @@ createRoot(document.getElementById('root')!).render(
                   error: { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
                 }}
               />
-            </SocketProvider>
+            </AuthedSocketProvider>
           </ModeProvider>
         </ThemeProvider>
       </AuthProvider>

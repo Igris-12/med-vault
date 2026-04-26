@@ -92,13 +92,20 @@ export async function uploadFiles(files: File[]): Promise<Array<{ docId: string;
     await new Promise((r) => setTimeout(r, 2000));
     return files.map((f, i) => ({ docId: `mock-${Date.now()}-${i}`, filename: f.name }));
   }
+  // Use the same live Firebase token as all other API calls (getAuthToken() auto-refreshes)
+  const { getAuthToken } = await import('./base');
+  const token = await getAuthToken();
   const formData = new FormData();
   files.forEach((f) => formData.append('files', f));
   const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/upload`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${localStorage.getItem('firebase_token') || 'dev-bypass-token'}` },
+    headers: { Authorization: `Bearer ${token}` },
     body: formData,
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `Upload failed: ${res.status}`);
+  }
   const json = await res.json();
   return json.data;
 }
