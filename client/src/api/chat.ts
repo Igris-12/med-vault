@@ -1,8 +1,5 @@
 import { apiFetch, useApiData, getAuthToken } from './base';
-import { MOCK_SUGGESTED_QUESTIONS } from '../mock';
 import type { ChatSession } from '../types/api';
-
-export { MOCK_SUGGESTED_QUESTIONS };
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 

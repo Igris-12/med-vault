@@ -4,7 +4,37 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { fetchNearbyPlaces, type NearbyPlace, type PlaceType } from '../services/overpassService';
 import { getRoute, formatDistance, formatDuration, createRadiusCircle, type RouteStep } from '../services/routeService';
-import { getDoctorsForHospital, type Doctor } from '../mock/mockDoctors';
+export type Doctor = {
+  id: string;
+  name: string;
+  specialty: string;
+  qualification: string;
+  experienceYears: number;
+  rating: number;
+  reviewCount: number;
+  consultationFee: number;
+  nextAvailable: string;
+  source: string;
+  languages: string[];
+};
+
+export function getDoctorsForHospital(hospitalId: string): Doctor[] {
+  return [
+    {
+      id: `doc-${hospitalId}-1`,
+      name: 'Dr. John Doe',
+      specialty: 'General Medicine',
+      qualification: 'MBBS, MD',
+      experienceYears: 15,
+      rating: 4.8,
+      reviewCount: 120,
+      consultationFee: 800,
+      nextAvailable: 'Today',
+      source: 'Internal',
+      languages: ['English', 'Hindi'],
+    }
+  ];
+}
 
 
 // --- Suggestions derived from user health data --------------------------------

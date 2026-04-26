@@ -1,7 +1,7 @@
 // @refresh reset
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Smartphone, CheckCircle, MessageCircle, Send, RefreshCw, Wifi, WifiOff, Clock } from 'lucide-react';
+import { CheckCircle, MessageCircle, Send, RefreshCw, Wifi, WifiOff, Clock } from 'lucide-react';
 import { getWhatsAppStatus, getWhatsAppMessages } from '../api/whatsapp';
 import type { WAMessage } from '../api/whatsapp';
 import { linkWhatsApp } from '../api/users';
@@ -30,20 +30,20 @@ function WABubble({ msg }: { msg: WAMessage }) {
           maxWidth: '75%',
           padding: '8px 12px',
           borderRadius: isOut ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-          background: isOut ? 'rgba(7,94,84,0.85)' : 'rgba(255,255,255,0.06)',
-          border: isOut ? 'none' : '1px solid rgba(255,255,255,0.1)',
+          background: isOut ? 'rgba(7,94,84,0.85)' : 'var(--dd-card)',
+          border: isOut ? 'none' : '1px solid var(--dd-border)',
           backdropFilter: 'blur(8px)',
         }}
       >
         {msg.mediaUrl && msg.mediaType?.startsWith('image/') && (
           <img src={msg.mediaUrl} alt="media" style={{ maxWidth: 200, borderRadius: 8, marginBottom: 4, display: 'block' }} />
         )}
-        <p style={{ fontSize: 13, color: isOut ? '#e2ffe8' : 'rgba(255,255,255,0.85)', lineHeight: 1.5, margin: 0 }}>
+        <p style={{ fontSize: 13, color: isOut ? '#e2ffe8' : 'var(--dd-text)', lineHeight: 1.5, margin: 0 }}>
           {msg.content}
         </p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>
-          <Clock size={9} style={{ color: isOut ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.3)' }} />
-          <span style={{ fontSize: 10, color: isOut ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.3)' }}>
+          <Clock size={9} style={{ color: isOut ? 'rgba(255,255,255,0.6)' : 'var(--dd-text-dim)' }} />
+          <span style={{ fontSize: 10, color: isOut ? 'rgba(255,255,255,0.6)' : 'var(--dd-text-dim)' }}>
             {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
@@ -200,7 +200,7 @@ export default function WhatsAppConnectPage() {
         setConnected(status.connected);
         setPhone(status.phone);
         if (status.connected) loadMessages();
-      } catch {}
+      } catch { }
       finally { setStatusLoading(false); }
     })();
   }, []);
@@ -225,7 +225,7 @@ export default function WhatsAppConnectPage() {
     try {
       const res = await getWhatsAppMessages(100);
       if (res.data) setMessages(res.data);
-    } catch {}
+    } catch { }
     finally { setLoadingMsgs(false); }
   }
 

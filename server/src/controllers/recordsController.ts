@@ -65,6 +65,25 @@ export const getDashboardSummary = async (req: Request, res: Response): Promise<
     : new Date();
   const daysTracked = Math.floor((Date.now() - earliest.getTime()) / (1000 * 60 * 60 * 24));
 
+  // Aggregate top conditions from all patient documents
+  const conditionDocs = await DocumentModel.find(
+    { userId, status: 'done' },
+    { conditionsMentioned: 1, summaryClinical: 1, filename: 1, documentDate: 1, documentType: 1 }
+  ).sort({ documentDate: -1 }).limit(30).lean();
+
+  // Flatten and count condition occurrences
+  const conditionMap: Record<string, number> = {};
+  conditionDocs.forEach((d: any) => {
+    (d.conditionsMentioned || []).forEach((c: string) => {
+      const key = c.toLowerCase().trim();
+      conditionMap[key] = (conditionMap[key] || 0) + 1;
+    });
+  });
+  const topConditions = Object.entries(conditionMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([condition, count]) => ({ condition, count }));
+
   res.json({
     success: true,
     data: {
@@ -74,6 +93,13 @@ export const getDashboardSummary = async (req: Request, res: Response): Promise<
       anomalyCount,
       activePrescriptionCount: activePrescriptions,
       daysTracked,
+      topConditions,
+      recentDocs: conditionDocs.slice(0, 10).map((d: any) => ({
+        conditionsMentioned: d.conditionsMentioned || [],
+        filename: d.filename,
+        documentType: d.documentType,
+        documentDate: d.documentDate,
+      })),
     },
   });
 };

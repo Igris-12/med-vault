@@ -2,8 +2,12 @@ import { useRef, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useMotionValue, useSpring } from 'framer-motion';
 import { MessageCircle, Bell, ArrowRight, CheckCheck, Zap, Shield, Sparkles } from 'lucide-react';
-import { FLOATING_REMINDERS } from '../../mock/mockReminders';
-
+const FLOATING_REMINDERS = [
+  { icon: '💧', label: 'Drink water', color: '#3b82f6', delay: 0 },
+  { icon: '💊', label: 'Take vitamin', color: '#eab308', delay: 0.2 },
+  { icon: '🚶‍♂️', label: 'Stretch legs', color: '#10b981', delay: 0.4 },
+  { icon: '🍎', label: 'Snack time', color: '#ef4444', delay: 0.6 },
+];
 /* ─── Animated Mesh Background ────────────────────────────────────────── */
 function MeshBackground() {
   return (

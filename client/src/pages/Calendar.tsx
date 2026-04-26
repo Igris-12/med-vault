@@ -1,7 +1,31 @@
 import { useState, useMemo, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Plus, X, Clock, Trash2, Edit2 } from 'lucide-react';
-import { MONTHS, DAYS, PALETTE, toISO, generateMockEvents } from '../mockData/calendarEvents';
-import type { CalEvent } from '../mockData/calendarEvents';
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const PALETTE = [
+  { bg: '#EEF2FF', dot: '#6366F1' },
+  { bg: '#FDF2F8', dot: '#EC4899' },
+  { bg: '#ECFDF5', dot: '#10B981' },
+  { bg: '#FFFBEB', dot: '#F59E0B' },
+  { bg: '#F0FDF4', dot: '#22C55E' },
+];
+const toISO = (y: number, m: number, d: number) => {
+  const date = new Date(y, m, d);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+export type CalEvent = {
+  id: string;
+  title: string;
+  dateStr: string;
+  timeStr: string;
+  fullDateStr: string;
+  colorBg: string;
+  colorDot: string;
+  rating?: number;
+};
+import { apiFetch } from '../api/base';
+import toast from 'react-hot-toast';
 
 export default function CalendarPage() {
   const [year, setYear] = useState(new Date().getFullYear());
@@ -13,11 +37,20 @@ export default function CalendarPage() {
   const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   
-  const [form, setForm] = useState({ title: '', day: 1 });
+  const [form, setForm] = useState({ title: '', day: 1, timeStr: '09:00 am' });
   
+  const fetchEvents = async () => {
+    try {
+      const res = await apiFetch<CalEvent[]>('/api/calendar');
+      setEvents(res || []);
+    } catch (err) {
+      toast.error('Failed to load calendar tasks');
+    }
+  };
+
   useEffect(() => {
-    setEvents(generateMockEvents(year));
-  }, [year]);
+    fetchEvents();
+  }, []);
 
   const cells = useMemo(() => {
     const first = new Date(year, month, 1).getDay();
@@ -34,47 +67,61 @@ export default function CalendarPage() {
     return arr;
   }, [year, month]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.title) return;
     const day = Math.max(1, Math.min(form.day, new Date(year, month + 1, 0).getDate()));
     
     if (isEditing && selectedEvent) {
       // Update existing
-      setEvents(events.map(e => e.id === selectedEvent.id ? {
-        ...e,
+      const updated = {
         title: form.title,
         dateStr: toISO(year, month, day),
         fullDateStr: `${MONTHS[month]} ${day}, ${year}`
-      } : e));
-      setIsEditing(false);
-      setSelectedEvent({
-        ...selectedEvent,
-        title: form.title,
-        dateStr: toISO(year, month, day),
-        fullDateStr: `${MONTHS[month]} ${day}, ${year}`
-      });
+      };
+      
+      try {
+        const res = await apiFetch<CalEvent>(`/api/calendar/${selectedEvent.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(updated)
+        });
+        setEvents(events.map(e => e.id === selectedEvent.id ? res : e));
+        setIsEditing(false);
+        setSelectedEvent(res);
+        toast.success('Task updated');
+      } catch (err) {
+        toast.error('Failed to update task');
+      }
     } else {
       // Create new
       const palette = PALETTE[Math.floor(Math.random() * PALETTE.length)];
-      const newEv: CalEvent = {
-        id: Date.now().toString(),
+      const newEv = {
         title: form.title,
         dateStr: toISO(year, month, day),
-        timeStr: '09:00 am',
+        timeStr: form.timeStr || '09:00 am',
         fullDateStr: `${MONTHS[month]} ${day}, ${year}`,
         colorBg: palette.bg,
         colorDot: palette.dot,
         rating: 5
       };
-      setEvents(prev => [...prev, newEv]);
-      setShowAdd(false);
+      
+      try {
+        const res = await apiFetch<CalEvent>('/api/calendar', {
+          method: 'POST',
+          body: JSON.stringify(newEv)
+        });
+        setEvents(prev => [...prev, res]);
+        setShowAdd(false);
+        toast.success('Task scheduled and reminder set');
+      } catch (err) {
+        toast.error('Failed to create task');
+      }
     }
   };
 
   const openAdd = (day: number) => {
     setSelectedEvent(null);
     setIsEditing(false);
-    setForm({ title: '', day });
+    setForm({ title: '', day, timeStr: '09:00 am' });
     setShowAdd(true);
   };
 
@@ -82,7 +129,8 @@ export default function CalendarPage() {
     if (!selectedEvent) return;
     setForm({ 
       title: selectedEvent.title, 
-      day: parseInt(selectedEvent.dateStr.split('-')[2]) 
+      day: parseInt(selectedEvent.dateStr.split('-')[2]),
+      timeStr: selectedEvent.timeStr 
     });
     setIsEditing(true);
   };
@@ -216,11 +264,31 @@ export default function CalendarPage() {
                 
                 <div style={{ marginBottom: 'auto' }}>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: THEME.textLight, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Date</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 12px', border: `1px solid ${THEME.border}`, borderRadius: '8px', background: '#F8FAFC' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 12px', border: `1px solid ${THEME.border}`, borderRadius: '8px', background: '#F8FAFC', marginBottom: '16px' }}>
                     <span style={{ fontSize: '14px', fontWeight: 600, color: THEME.text }}>{MONTHS[month]}</span>
                     <input type="number" value={form.day} onChange={e=>setForm({...form, day: parseInt(e.target.value)||1})} min={1} max={31} style={{ width: '60px', padding: '6px 10px', border: `1px solid ${THEME.border}`, borderRadius: '6px', outline: 'none', fontSize: '14px', fontWeight: 600 }} />
                     <span style={{ fontSize: '14px', fontWeight: 600, color: THEME.text }}>{year}</span>
                   </div>
+
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: THEME.textLight, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Reminder Time</label>
+                  <input type="time" value={(()=>{
+                    const match = form.timeStr.match(/(\d+):(\d+)\s*(am|pm)/i);
+                    if (!match) return '09:00';
+                    let h = parseInt(match[1]);
+                    const m = match[2];
+                    const ampm = match[3].toLowerCase();
+                    if (ampm === 'pm' && h < 12) h += 12;
+                    if (ampm === 'am' && h === 12) h = 0;
+                    return `${h.toString().padStart(2, '0')}:${m}`;
+                  })()} onChange={e => {
+                      const val = e.target.value;
+                      if (!val) return;
+                      const [h, m] = val.split(':');
+                      const hour = parseInt(h);
+                      const ampm = hour >= 12 ? 'pm' : 'am';
+                      const formattedHour = hour % 12 || 12;
+                      setForm({...form, timeStr: `${formattedHour < 10 ? '0'+formattedHour : formattedHour}:${m} ${ampm}`});
+                  }} style={{ width: '100%', padding: '10px 12px', border: `1px solid ${THEME.border}`, borderRadius: '8px', background: '#F8FAFC', outline: 'none', fontSize: '14px', fontWeight: 600, color: THEME.text, boxSizing: 'border-box' }} />
                 </div>
                 
                 <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
@@ -250,9 +318,15 @@ export default function CalendarPage() {
                 </div>
                 
                 <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
-                  <button onClick={() => {
-                    setEvents(events.filter(e => e.id !== selectedEvent.id));
-                    setSelectedEvent(null);
+                  <button onClick={async () => {
+                    try {
+                      await apiFetch(`/api/calendar/${selectedEvent.id}`, { method: 'DELETE' });
+                      setEvents(events.filter(e => e.id !== selectedEvent.id));
+                      setSelectedEvent(null);
+                      toast.success('Task deleted');
+                    } catch (err) {
+                      toast.error('Failed to delete task');
+                    }
                   }} style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '12px', background: '#FEF2F2', color: '#EF4444', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>
                     <Trash2 size={15} /> Delete
                   </button>

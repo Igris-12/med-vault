@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Send, Sparkles } from 'lucide-react';
 import { ReminderForm } from '../../components/reminders/ReminderForm';
@@ -11,6 +12,7 @@ const TEMPLATES = [
 ];
 
 export default function WASchedule() {
+  const [prefilledMessage, setPrefilledMessage] = useState('');
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
@@ -45,7 +47,7 @@ export default function WASchedule() {
 
       {/* Form */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-        <ReminderForm />
+        <ReminderForm initialMessage={prefilledMessage} onMessageUsed={() => setPrefilledMessage('')} />
       </motion.div>
 
       {/* Templates */}
@@ -55,6 +57,7 @@ export default function WASchedule() {
         <div className="flex flex-wrap gap-2">
           {TEMPLATES.map(tpl => (
             <motion.button key={tpl} whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
+              onClick={() => { setPrefilledMessage(tpl); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
               className="btn-ghost" style={{ padding: '6px 12px', fontSize: '12px' }}>
               {tpl}
             </motion.button>

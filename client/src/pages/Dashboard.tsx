@@ -3,9 +3,7 @@ import { Link } from 'react-router-dom';
 import { useDashboardSummary, useAnomalies, useDocuments, useTimeline } from '../api/records';
 import { HealthPulseRiver } from '../components/viz/HealthPulseRiver';
 import { DocumentCard } from '../components/shared/DocumentCard';
-import { ModeToggle } from '../components/shared/ModeToggle';
-import { CardSkeleton, EmptyState, ErrorState } from '../components/shared/Skeleton';
-import { useMode } from '../context/ModeContext';
+import { CardSkeleton, EmptyState } from '../components/shared/Skeleton';
 import { useAuth } from '../context/AuthContext';
 import type { MedDocument, Anomaly, TimelineMonth } from '../types/api';
 
@@ -22,7 +20,6 @@ function StatCard({ icon, value, label, color = 'text-teal' }: {
 }
 
 function AnomalyCard({ anomaly }: { anomaly: Anomaly }) {
-  const { isDoctor } = useMode();
   const latest = anomaly.readings[anomaly.readings.length - 1];
   const first = anomaly.readings[0];
   const delta = latest.value - first.value;
@@ -63,7 +60,7 @@ function AnomalyCard({ anomaly }: { anomaly: Anomaly }) {
       </div>
 
       <p className="font-body text-xs text-text-muted leading-relaxed">
-        {isDoctor ? anomaly.clinicalExplanation : anomaly.plainExplanation}
+        {anomaly.clinicalExplanation || anomaly.plainExplanation}
       </p>
 
       <p className="font-mono text-xs mt-2">
@@ -109,7 +106,6 @@ export default function Dashboard() {
             {hoveredMonth ? `Viewing ${hoveredMonth.month}` : 'Your health command center'}
           </p>
         </div>
-        <ModeToggle />
       </div>
 
       {/* Stats row */}
@@ -203,8 +199,6 @@ export default function Dashboard() {
 }
 
 function DocSlideOver({ doc, onClose }: { doc: MedDocument; onClose: () => void }) {
-  const { isDoctor } = useMode();
-
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={onClose} />
@@ -225,7 +219,7 @@ function DocSlideOver({ doc, onClose }: { doc: MedDocument; onClose: () => void 
         {/* Summary */}
         <div className="mv-card">
           <p className="font-body text-sm text-text-muted leading-relaxed">
-            {isDoctor ? doc.summaryClinical : doc.summaryPlain}
+            {doc.summaryClinical || doc.summaryPlain}
           </p>
         </div>
 

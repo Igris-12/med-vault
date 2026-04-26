@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useChatSessions } from '../api/chat';
 import { streamChatMessage } from '../api/chat';
-import { MOCK_SUGGESTED_QUESTIONS } from '../mock';
-import { useMode } from '../context/ModeContext';
+
 import type { ChatMessage } from '../types/api';
 import { Mic, MicOff, Send, Square } from 'lucide-react';
 
@@ -65,7 +64,6 @@ function MessageBubble({ msg, streaming }: { msg: ChatMessage; streaming?: boole
 
 export default function Chat() {
   const { data: sessions } = useChatSessions();
-  const { isDoctor } = useMode();
 
   const [messages, setMessages] = useState<ChatMessage[]>(
     sessions?.[0]?.messages || []
@@ -83,10 +81,13 @@ export default function Chat() {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Pre-populate with chat history
+  // Pre-populate with chat history — filter out empty/audio-URL messages
   useEffect(() => {
     if (sessions?.[0]?.messages && messages.length === 0) {
-      setMessages(sessions[0].messages);
+      const validMsgs = sessions[0].messages.filter(
+        (m: ChatMessage) => m.content && m.content.trim() && !m.content.startsWith('http')
+      );
+      setMessages(validMsgs);
     }
   }, [sessions]);
 
@@ -183,7 +184,6 @@ export default function Chat() {
         formData.append('file', blob, `voice_${Date.now()}.webm`);
 
         try {
-          const { apiFetch } = await import('../api/base');
           const { getAuthToken } = await import('../api/base');
           const token = await getAuthToken();
 
@@ -195,10 +195,13 @@ export default function Chat() {
 
           if (res.ok) {
             const json = await res.json();
-            // The server will transcribe and return the text, or we send audio URL
-            const transcribed = json.data?.transcription || json.data?.url || '';
+            const transcribed = json.data?.transcription || json.data?.text || '';
             if (transcribed) {
-              setInput(transcribed);
+              // Auto-send the transcription directly — don't put URL in input
+              await sendMessage(transcribed);
+            } else {
+              // No transcription available — show a placeholder
+              setInput('[Voice message — transcription unavailable]');
             }
           }
         } catch (err) {
@@ -246,7 +249,7 @@ export default function Chat() {
           <div>
             <p className="font-sans font-semibold text-text-primary text-sm">MedVault AI</p>
             <p className="font-body text-xs text-text-muted">
-              {isDoctor ? 'Clinical mode' : 'Patient mode'} · Grounded in your records
+              Clinical mode · Grounded in your records
             </p>
           </div>
           <span className="ml-auto badge-teal text-xs">● Active</span>
@@ -292,7 +295,7 @@ export default function Chat() {
         {/* Suggested chips */}
         {messages.length < 2 && (
           <div className="px-5 pb-3 flex gap-2 flex-wrap">
-            {MOCK_SUGGESTED_QUESTIONS.slice(0, 3).map((q) => (
+            {['What is my blood pressure?', 'Show my recent labs', 'Any new prescriptions?'].slice(0, 3).map((q) => (
               <button
                 key={q}
                 onClick={() => sendMessage(q)}
@@ -382,9 +385,7 @@ export default function Chat() {
         <div className="mv-card">
           <h3 className="font-sans font-semibold text-sm text-text-primary mb-2">Mode</h3>
           <p className="font-body text-xs text-text-muted">
-            {isDoctor
-              ? 'Clinical mode: technical terms and full medical detail'
-              : 'Patient mode: plain language, no jargon'}
+            Clinical mode: technical terms and full medical detail
           </p>
         </div>
       </div>

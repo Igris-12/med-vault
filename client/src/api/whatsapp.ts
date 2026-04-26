@@ -55,3 +55,39 @@ export async function postSupportMessage(sessionId: string, content: string): Pr
     body: JSON.stringify({ content }),
   });
 }
+
+// ─── Reminders ─────────────────────────────────────────────────────────────────
+export interface ReminderActivity {
+  id: string;
+  reminderId: string;
+  message: string;
+  phone: string;
+  status: 'scheduled' | 'sending' | 'sent' | 'delivered' | 'failed' | 'pending';
+  timestamp: string;
+  scheduledAt: string;
+  frequency: string;
+  tag?: string;
+  createdAt: string;
+}
+
+export interface RemindersResponse {
+  items: ReminderActivity[];
+  stats: {
+    total: number;
+    sent: number;
+    pending: number;
+    failed: number;
+    sentToday: number;
+  };
+}
+
+export async function getReminders(status?: string, limit = 100): Promise<RemindersResponse> {
+  const qs = new URLSearchParams({ limit: String(limit) });
+  if (status && status !== 'all') qs.set('status', status);
+  return apiFetch<RemindersResponse>(`/api/reminders?${qs}`);
+}
+
+export async function deleteReminder(id: string): Promise<void> {
+  return apiFetch(`/api/reminders/${id}`, { method: 'DELETE' });
+}
+

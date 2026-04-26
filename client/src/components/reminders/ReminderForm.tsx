@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Clock, Phone, MessageSquare, CheckCircle, Loader2, Tag } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -16,6 +16,8 @@ const TAG_OPTIONS = ['Work', 'Health', 'Personal', 'Fitness', 'Finance', 'Family
 
 interface ReminderFormProps {
   onSuccess?: (data: ReminderFormData) => void;
+  initialMessage?: string;
+  onMessageUsed?: () => void;
 }
 
 function triggerConfetti() {
@@ -39,12 +41,21 @@ function triggerConfetti() {
   }
 }
 
-export function ReminderForm({ onSuccess }: ReminderFormProps) {
+export function ReminderForm({ onSuccess, initialMessage, onMessageUsed }: ReminderFormProps) {
   const [form, setForm] = useState<ReminderFormData>({
     message: '', phone: '', scheduledAt: '', frequency: 'once', tag: '',
   });
   const [status, setStatus] = useState<'idle' | 'loading' | 'success'>('idle');
   const formRef = useRef<HTMLDivElement>(null);
+
+  // Apply template message when parent pushes one in
+  useEffect(() => {
+    if (initialMessage) {
+      setForm(f => ({ ...f, message: initialMessage }));
+      onMessageUsed?.();
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [initialMessage]);
 
   const previewTime = form.scheduledAt
     ? new Date(form.scheduledAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
@@ -56,17 +67,44 @@ export function ReminderForm({ onSuccess }: ReminderFormProps) {
       toast.error('Please fill in all required fields.');
       return;
     }
+
+    // Validate: can't schedule in the past
+    if (new Date(form.scheduledAt) <= new Date()) {
+      toast.error('Scheduled time must be in the future.');
+      return;
+    }
+
     setStatus('loading');
-    await new Promise(r => setTimeout(r, 1800));
-    setStatus('success');
-    triggerConfetti();
-    toast.success('Reminder scheduled! WhatsApp message queued.', { icon: '✅', duration: 4000 });
-    onSuccess?.(form);
-    setTimeout(() => {
+    try {
+      const { authFetch } = await import('../../api/base');
+      const res = await authFetch('/api/users/schedule-reminder', {
+        method: 'POST',
+        body: JSON.stringify({
+          message:     form.message.trim(),
+          scheduledAt: new Date(form.scheduledAt).toISOString(), // always send UTC ISO string
+          frequency:   form.frequency,
+          tag:         form.tag || 'manual',
+          // phone is auto-read from the user's linked whatsappPhone on the server
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to schedule reminder');
+
+      setStatus('success');
+      triggerConfetti();
+      const timeLabel = new Date(form.scheduledAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+      toast.success(`Reminder scheduled for ${timeLabel}!`, { icon: '✅', duration: 5000 });
+      onSuccess?.(form);
+      setTimeout(() => {
+        setStatus('idle');
+        setForm({ message: '', phone: '', scheduledAt: '', frequency: 'once', tag: '' });
+      }, 3000);
+    } catch (err: any) {
       setStatus('idle');
-      setForm({ message: '', phone: '', scheduledAt: '', frequency: 'once', tag: '' });
-    }, 3000);
+      toast.error(err.message || 'Failed to schedule reminder');
+    }
   };
+
 
   // CSS-var aware input style
   const inputStyle: React.CSSProperties = {

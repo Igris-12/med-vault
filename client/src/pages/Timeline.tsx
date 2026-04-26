@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useTimeline } from '../api/records';
 import { HealthPulseRiver } from '../components/viz/HealthPulseRiver';
-import { ModeToggle } from '../components/shared/ModeToggle';
 import type { TimelineMonth, DocumentType } from '../types/api';
 
 const TYPE_FILTERS: { key: DocumentType | 'all'; label: string }[] = [
@@ -42,7 +41,6 @@ export default function Timeline() {
           <h1 className="font-sans font-bold text-2xl text-text-primary">Health Story</h1>
           <p className="font-body text-sm text-text-muted mt-1">36-month health timeline</p>
         </div>
-        <ModeToggle />
       </div>
 
       {/* Filter chips */}

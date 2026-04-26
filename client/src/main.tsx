@@ -29,7 +29,7 @@ createRoot(document.getElementById('root')!).render(
       <AuthProvider>
         <ThemeProvider>
           <ModeProvider>
-            <SocketProvider userId="dev-user-001">
+            <SocketProvider>
               <Root />
               <Toaster
                 position="bottom-right"

@@ -4,8 +4,4 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // Disable Oxc transformer — use esbuild instead (handles Unicode/emoji correctly)
-  experimental: {
-    oxc: false,
-  },
 })

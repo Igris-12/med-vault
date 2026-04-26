@@ -26,6 +26,7 @@ export default function Landing() {
   const navigate = useNavigate();
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState('');
+  const [role, setRole] = useState<'patient' | 'doctor'>('patient');
 
   useEffect(() => {
     if (user) {
@@ -41,8 +42,8 @@ export default function Landing() {
     setError('');
     setSigningIn(true);
     try {
-      await signInWithGoogle();
-      navigate('/app/dashboard', { replace: true });
+      await signInWithGoogle(role);
+      navigate(role === 'doctor' ? '/app/doctor/dashboard' : '/app/dashboard', { replace: true });
     } catch (err) {
       setError('Sign-in failed. Please try again.');
     } finally {
@@ -111,13 +112,30 @@ export default function Landing() {
               Upload any medical document. MedVault extracts, connects, and organizes your health history effortlessly.
             </p>
             
+            <div className="flex flex-col gap-4 mb-6">
+              <div className="flex bg-white/10 p-1 rounded-xl w-max backdrop-blur-sm border border-white/20">
+                <button
+                  onClick={() => setRole('patient')}
+                  className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${role === 'patient' ? 'bg-white text-[var(--dd-sidebar-bg)] shadow-md' : 'text-white/80 hover:text-white'}`}
+                >
+                  I'm a Patient
+                </button>
+                <button
+                  onClick={() => setRole('doctor')}
+                  className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${role === 'doctor' ? 'bg-white text-[var(--dd-sidebar-bg)] shadow-md' : 'text-white/80 hover:text-white'}`}
+                >
+                  I'm a Healthcare Provider
+                </button>
+              </div>
+            </div>
+            
             <div className="flex flex-wrap items-center gap-4">
               <button
                 onClick={handleGoogleSignIn}
                 disabled={signingIn}
                 className="bg-white text-[var(--dd-sidebar-bg)] hover:shadow-lg hover:-translate-y-0.5 transition-all px-8 py-3.5 rounded-xl font-bold flex items-center gap-3 disabled:opacity-60"
               >
-                <GoogleIcon colored /> {signingIn ? 'Please wait...' : 'Start for Free'}
+                <GoogleIcon colored /> {signingIn ? 'Please wait...' : (role === 'doctor' ? 'Provider Login' : 'Start for Free')}
               </button>
               <Link 
                 to="/app/chat" 

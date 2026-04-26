@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { Search, X, ZoomIn, ZoomOut, Maximize2, Loader2, Sparkles, AlertTriangle, Activity, Brain, Network, Plus } from 'lucide-react';
+import { X, ZoomIn, ZoomOut, Maximize2, Loader2, AlertTriangle, Brain, Network } from 'lucide-react';
 
 // ── Inline mock KB (used as fallback when server is offline) ─────────────────
 const MOCK_KB = {
@@ -70,7 +70,7 @@ const MOCK_KB = {
 };
 
 const URGENCY_COL: Record<string, string> = { CRITICAL:'#EF4444', URGENT:'#F97316', MODERATE:'#EAB308', LOW:'#22C55E' };
-const QUICK = ['chest_pain','sweating','nausea','shortness_of_breath','fever','confusion','palpitations','dizziness','abdominal_pain','headache','vomiting','cough','leg_swelling','blurred_vision','arm_weakness','facial_droop','rapid_heart_rate','chills'];
+
 
 function toRGBA(hex: string, a=1) {
   if(!hex||hex.startsWith('rgba')) return hex;
@@ -83,17 +83,65 @@ export default function SymptomGraph() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [kb, setKb] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const symptoms = ['chest_pain', 'sweating', 'nausea', 'shortness_of_breath', 'palpitations', 'dizziness'];
+  // ── Real patient conditions from MongoDB records ──────────────────────────
+  const [patientConditions, setPatientConditions] = useState<string[]>([]);
+  const [conditionDocsMap, setConditionDocsMap] = useState<Record<string, any[]>>({});
+  const [patientLoading, setPatientLoading] = useState(true);
+  // User-added manual symptoms on top of patient conditions
+  const [manualSymptoms] = useState<string[]>([]);
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [dim, setDim] = useState({ w: 800, h: 600 });
   const analysed = true;
+
+  // Fetch patient's actual conditions from MongoDB
+  useEffect(() => {
+    const fetchPatientData = async () => {
+      try {
+        const { apiFetch } = await import('../api/base');
+        // apiFetch unwraps json.data, so res = { totalDocuments, topConditions, recentDocs, ... }
+        const res = await apiFetch<any>('/api/records/dashboard-summary');
+        const conditions: string[] = [];
+        const cMap: Record<string, any[]> = {};
+
+        // From recentDocs conditionsMentioned
+        (res.recentDocs || []).forEach((doc: any) => {
+          (doc.conditionsMentioned || []).forEach((c: string) => {
+            const normalized = c.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+            if (normalized) {
+              if (!conditions.includes(normalized)) conditions.push(normalized);
+              if (!cMap[normalized]) cMap[normalized] = [];
+              if (!cMap[normalized].some(d => d.filename === doc.filename)) {
+                cMap[normalized].push(doc);
+              }
+            }
+          });
+        });
+
+        // From topConditions aggregate
+        (res.topConditions || []).forEach((c: any) => {
+          const name = (c.condition || c._id || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+          if (name && !conditions.includes(name)) conditions.push(name);
+        });
+
+        setPatientConditions(conditions.slice(0, 20));
+        setConditionDocsMap(cMap);
+      } catch {
+        setPatientConditions(['chest_pain', 'sweating', 'nausea', 'shortness_of_breath', 'palpitations', 'dizziness']);
+      } finally {
+        setPatientLoading(false);
+      }
+    };
+    fetchPatientData();
+  }, []);
+
+  // All symptoms = patient conditions + manually added
+  const symptoms = [...new Set([...patientConditions, ...manualSymptoms])];
 
   useEffect(() => {
     fetch('http://localhost:3001/api/ai/graph/kb')
       .then(r => r.json())
       .then(d => { setKb(d.data); setLoading(false); })
       .catch(() => {
-        // Server offline — use embedded mock KB so demo always works
         setKb(MOCK_KB);
         setLoading(false);
       });
@@ -110,19 +158,60 @@ export default function SymptomGraph() {
     if(!kb||!analysed||!symptoms.length) return {nodes:[],links:[]};
     const nodes:any[]=[], links:any[]=[], added=new Set<string>();
     const addN=(n:any)=>{ if(!added.has(n.id)){nodes.push(n);added.add(n.id);} };
-    symptoms.forEach(s=>addN({id:`sym_${s}`,label:s.replace(/_/g,' '),type:'symptom',color:'#7C3AED',highlighted:true,val:4}));
+
+    // Render patient condition nodes — distinguish from KB-symptom nodes
+    symptoms.forEach(s=>addN({
+      id:`sym_${s}`,
+      label:s.replace(/_/g,' '),
+      type:'symptom',
+      color: patientConditions.includes(s) ? '#06b6d4' : '#7C3AED', // cyan = from patient records, purple = manually added
+      highlighted:true,
+      val:5,
+      isPatientCondition: patientConditions.includes(s),
+      docs: conditionDocsMap[s] || [],
+    }));
+
+    const matchedPatientConditions = new Set<string>();
+
     kb.symptom_clusters?.forEach((c:any)=>{
-      const matched=(c.tags||[]).filter((t:string)=>symptoms.includes(t));
+      const matched=(c.tags||[]).filter((t:string)=>symptoms.some(s=>s===t||s.includes(t)||t.includes(s.replace(/_/g,''))));
       if(!matched.length) return;
+      
+      matched.forEach((s:string) => matchedPatientConditions.add(s));
+      
       const col = URGENCY_COL[c.urgency_label]||'#4F46E5';
       const isPrimary = matched.length>=c.match_threshold;
-      addN({id:`cl_${c.id}`,label:c.id.replace(/_/g,' '),type:'cluster',color:col,highlighted:isPrimary,val:(7+matched.length*2)*(c.prescription_weight||1),urgency_label:c.urgency_label,clinical_context:c.clinical_context,next_actions:c.next_actions,contraindications:c.contraindications,matchScore:matched.length});
+      // Highlight cluster if it relates to patient's actual conditions
+      const isPatientRelated = (c.tags||[]).some((t:string)=>patientConditions.some(p=>p===t||p.includes(t)||t.includes(p.replace(/_/g,''))));
+      addN({id:`cl_${c.id}`,label:c.id.replace(/_/g,' '),type:'cluster',color:col,highlighted:isPrimary||isPatientRelated,val:(8+matched.length*2.5)*(c.prescription_weight||1),urgency_label:c.urgency_label,clinical_context:c.clinical_context,next_actions:c.next_actions,contraindications:c.contraindications,matchScore:matched.length,isPatientRelated});
       matched.forEach((s:string)=>links.push({source:`sym_${s}`,target:`cl_${c.id}`,type:'SYMPTOM_OF',highlighted:isPrimary}));
       (c.differential_diagnoses||[]).slice(0,3).forEach((d:string)=>{addN({id:`df_${d}`,label:d.replace(/_/g,' '),type:'differential',color:'#EA580C',val:4});links.push({source:`cl_${c.id}`,target:`df_${d}`,type:'DIFFERENTIAL_OF',highlighted:isPrimary});});
       (c.risk_amplifiers||[]).slice(0,4).forEach((r:string)=>{addN({id:`rk_${r}`,label:r.replace(/_/g,' '),type:'risk',color:'#D97706',val:3});links.push({source:`cl_${c.id}`,target:`rk_${r}`,type:'AMPLIFIES_RISK',highlighted:false});});
     });
+
+    // Create generic clusters for unmatched patient conditions so they connect and size properly
+    patientConditions.forEach(p => {
+       if (!matchedPatientConditions.has(p)) {
+          const cId = `cl_chronic_${p}`;
+          addN({
+             id: cId,
+             label: p.replace(/_/g,' ') + ' Management',
+             type: 'cluster',
+             color: '#4F46E5', // Generic cluster color
+             highlighted: true,
+             val: 10, // Larger size for the cluster
+             urgency_label: 'MODERATE',
+             clinical_context: `Chronic management for ${p.replace(/_/g, ' ')}. Extracted directly from patient medical records.`,
+             next_actions: ['Monitor relevant labs', 'Ensure medication adherence', 'Schedule regular follow-ups'],
+             isPatientRelated: true,
+             matchScore: 1
+          });
+          links.push({ source: `sym_${p}`, target: cId, type: 'SYMPTOM_OF', highlighted: true });
+       }
+    });
+
     return {nodes,links};
-  },[kb,symptoms,analysed]);
+  },[kb,symptoms,analysed,patientConditions,conditionDocsMap]);
 
   useEffect(()=>{
     if(graphRef.current&&graphData.nodes.length){
@@ -177,15 +266,18 @@ export default function SymptomGraph() {
         {/* Header */}
         <div style={{ padding:'20px 18px 14px', borderBottom: border }}>
           <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
-            <div style={{ width:32, height:32, borderRadius:9, background:`${accent}18`, border:`1px solid ${accent}35`, display:'flex', alignItems:'center', justifyContent:'center' }}>
-              <Network size={15} color={accent}/>
+          <div style={{ width:36, height:36, borderRadius:9, background:`${accent}18`, border:`1px solid ${accent}35`, display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <Network size={18} color={accent}/>
             </div>
             <div>
-              <h1 style={{ fontWeight:800, fontSize:14, color: text, margin:0 }}>Prescription Analysis</h1>
-              <p style={{ fontSize:10, color: muted, margin:0 }}>Clinical Knowledge Engine</p>
+              <h1 style={{ fontWeight:900, fontSize:18, color: text, margin:0, letterSpacing:'-0.3px' }}>Clinical Graph</h1>
+              <p style={{ fontSize:11, color: muted, margin:0, fontWeight:600 }}>Patient Knowledge Engine</p>
             </div>
           </div>
-          <p style={{ fontSize:11, color: muted, lineHeight:1.6, margin:0 }}>Graph built automatically from extracted patient prescriptions.</p>
+          <p style={{ fontSize:12, color: muted, lineHeight:1.6, margin:0 }}>
+            Graph built from your <strong style={{ color: accent }}>{patientConditions.length}</strong> conditions extracted from MongoDB records.
+            {patientLoading && <span style={{ color: '#f59e0b' }}> Loading…</span>}
+          </p>
         </div>
 
         {/* Primary match result */}
@@ -259,7 +351,7 @@ export default function SymptomGraph() {
 
             {/* Legend */}
             <div style={{ position:'absolute', bottom:14, right:14, zIndex:10, background: cardBg, border: border, borderRadius:10, padding:'10px 14px', boxShadow:'0 2px 8px rgba(0,0,0,0.06)', display:'flex', flexDirection:'column', gap:7 }}>
-              {[['#7C3AED','Entered Symptom'],['#4F46E5','Condition Cluster'],['#EA580C','Differential Dx'],['#D97706','Risk Amplifier']].map(([col,lbl])=>(
+              {[['#06b6d4','Your Condition (from records)'],['#7C3AED','Added Symptom'],['#4F46E5','Condition Cluster'],['#EA580C','Differential Dx'],['#D97706','Risk Amplifier']].map(([col,lbl])=>(
                 <div key={lbl} style={{ display:'flex', alignItems:'center', gap:8 }}>
                   <span style={{ width:8, height:8, borderRadius:'50%', background: col as string, flexShrink:0 }}/>
                   <span style={{ fontSize:11, color: muted, fontWeight:600 }}>{lbl}</span>
@@ -269,13 +361,13 @@ export default function SymptomGraph() {
 
             {/* Selected node panel */}
             {selectedNode&&(
-              <div style={{ position:'absolute', top:14, left:14, zIndex:20, width:268, background: cardBg, border: border, borderRadius:12, padding:16, boxShadow:'0 4px 20px rgba(0,0,0,0.08)', maxHeight:'72vh', overflowY:'auto' }}>
+              <div style={{ position:'absolute', top:14, left:14, zIndex:20, width:320, background: cardBg, border: border, borderRadius:12, padding:16, boxShadow:'0 4px 24px rgba(0,0,0,0.12)', maxHeight:'80vh', overflowY:'auto' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
                   <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <span style={{ width:9, height:9, borderRadius:'50%', background: selectedNode.color, flexShrink:0 }}/>
-                    <p style={{ fontWeight:700, fontSize:13, color: text, margin:0, textTransform:'capitalize' }}>{selectedNode.label}</p>
+                    <span style={{ width:10, height:10, borderRadius:'50%', background: selectedNode.color, flexShrink:0 }}/>
+                    <h2 style={{ fontWeight:800, fontSize:15, color: text, margin:0, textTransform:'capitalize' }}>{selectedNode.label}</h2>
                   </div>
-                  <button onClick={()=>setSelectedNode(null)} style={{ background:'none', border:'none', cursor:'pointer', color: muted }}><X size={13}/></button>
+                  <button onClick={()=>setSelectedNode(null)} style={{ background:'#F1F5F9', border:'none', cursor:'pointer', color: muted, borderRadius:'50%', width:26, height:26, display:'flex', alignItems:'center', justifyContent:'center' }}><X size={14}/></button>
                 </div>
                 {selectedNode.urgency_label&&(
                   <span style={{ fontSize:9, fontWeight:800, color: URGENCY_COL[selectedNode.urgency_label], background:`${URGENCY_COL[selectedNode.urgency_label]}15`, border:`1px solid ${URGENCY_COL[selectedNode.urgency_label]}35`, padding:'2px 7px', borderRadius:99, display:'inline-block', marginBottom:9 }}>
@@ -289,6 +381,28 @@ export default function SymptomGraph() {
                     <p style={{ fontSize:11, color: muted, margin:0, lineHeight:1.55 }}>{a}</p>
                   </div>
                 ))}
+                
+                {/* Condition Details from Documents */}
+                {selectedNode.type === 'symptom' && selectedNode.isPatientCondition && (
+                  <div style={{ marginTop: 12 }}>
+                    <p style={{ fontSize:12, fontWeight:700, color: text, marginBottom:8 }}>Mentioned in Records:</p>
+                    {selectedNode.docs && selectedNode.docs.length > 0 ? (
+                      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                        {selectedNode.docs.map((doc: any, i: number) => (
+                          <div key={i} style={{ padding:10, background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:8 }}>
+                            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+                              <span style={{ fontSize:10, fontWeight:700, color:accent, textTransform:'uppercase', letterSpacing:'0.5px' }}>{doc.documentType?.replace('_',' ') || 'Record'}</span>
+                              {doc.documentDate && <span style={{ fontSize:10, color:muted }}>{new Date(doc.documentDate).toLocaleDateString()}</span>}
+                            </div>
+                            <p style={{ fontSize:12, fontWeight:600, color:text, margin:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }} title={doc.filename}>{doc.filename}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={{ fontSize:11, color:muted }}>Extracted from general patient history.</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
