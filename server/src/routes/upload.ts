@@ -20,19 +20,29 @@ const storage = multer.diskStorage({
   },
 });
 
+const ALLOWED_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+];
+
 const upload = multer({
   storage,
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB per file
   fileFilter: (_req, file, cb) => {
-    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
-    if (allowed.includes(file.mimetype)) cb(null, true);
-    else cb(new Error(`File type ${file.mimetype} not supported`));
+    if (ALLOWED_TYPES.includes(file.mimetype)) cb(null, true);
+    else {
+      console.warn(`⚠️  Skipping unsupported file type: ${file.mimetype} (${file.originalname})`);
+      cb(null, false); // skip silently — don't crash the whole batch
+    }
   },
 });
 
 const router = Router();
 
-router.post('/', authMiddleware, upload.array('files', 10), uploadController.handleUpload);
+router.post('/', authMiddleware, upload.array('files', 50), uploadController.handleUpload); // 50 files max (for folder uploads)
 router.get('/status/:docId', authMiddleware, uploadController.getStatus);
 
 // ─── Authenticated image serving ─────────────────────────────────────────────
