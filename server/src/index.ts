@@ -24,6 +24,8 @@ import dietRoutes from './routes/diet.js';
 import { startAllCronJobs } from './services/reminderCronService.js';
 import aiGraphRoutes from './routes/aiGraph.js';
 import doctorRoutes from './routes/doctor.js';
+import remindersRoutes from './routes/reminders.js';
+import calendarRoutes from './routes/calendar.js';
 
 dotenv.config();
 
@@ -101,6 +103,8 @@ app.use('/api/support', supportRoutes);
 app.use('/api/diet', dietRoutes);
 app.use('/api/ai/graph', aiGraphRoutes);
 app.use('/api/doctor', doctorRoutes);
+app.use('/api/reminders', remindersRoutes);
+app.use('/api/calendar', calendarRoutes);
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
 app.use((_req, res) => {

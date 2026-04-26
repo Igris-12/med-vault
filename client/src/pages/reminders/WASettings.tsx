@@ -54,6 +54,21 @@ function ProfileTab() {
   };
 
   const initials = (form.name || user?.displayName || '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const [testLoading, setTestLoading] = useState(false);
+  const [testResult, setTestResult]   = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const handleTestReminder = async () => {
+    if (!form.whatsappPhone) { setTestResult({ ok: false, msg: 'Save your WhatsApp number first.' }); return; }
+    setTestLoading(true); setTestResult(null);
+    try {
+      const r = await apiFetch<{ sent: boolean; to: string }>('/api/users/test-reminder', { method: 'POST' });
+      setTestResult({ ok: true, msg: `✅ Sent to ${r.to}! Check WhatsApp.` });
+    } catch (err: any) {
+      setTestResult({ ok: false, msg: `❌ ${err.message}` });
+    }
+    setTestLoading(false);
+    setTimeout(() => setTestResult(null), 8000);
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -95,13 +110,30 @@ function ProfileTab() {
           <input type="email" value={user?.email || ''} disabled className="mv-input opacity-50 cursor-not-allowed" />
         </div>
       </div>
-      <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={handleSave} disabled={saving} className="btn-primary self-start flex items-center gap-2">
-        {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-        {saving ? 'Saving…' : saved ? '✓ Saved!' : 'Save Changes'}
-      </motion.button>
+
+      <div className="flex flex-wrap gap-3 items-center">
+        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={handleSave} disabled={saving} className="btn-primary self-start flex items-center gap-2">
+          {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+          {saving ? 'Saving…' : saved ? '✓ Saved!' : 'Save Changes'}
+        </motion.button>
+        <motion.button
+          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+          onClick={handleTestReminder} disabled={testLoading}
+          style={{ padding: '8px 16px', borderRadius: 10, background: 'rgba(37,211,102,0.12)', border: '1px solid rgba(37,211,102,0.35)', color: '#22c55e', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Inter, sans-serif' }}>
+          {testLoading ? <Loader2 size={14} className="animate-spin" /> : '📲'}
+          {testLoading ? 'Sending…' : 'Send Test WhatsApp'}
+        </motion.button>
+      </div>
+
+      {testResult && (
+        <div style={{ padding: '10px 14px', borderRadius: 10, background: testResult.ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', border: `1px solid ${testResult.ok ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`, fontSize: 13, color: testResult.ok ? '#22c55e' : '#ef4444', fontFamily: 'Inter, sans-serif' }}>
+          {testResult.msg}
+        </div>
+      )}
     </div>
   );
 }
+
 
 /* ─── Appearance Tab ──────────────────────────────────────────────────────── */
 function AppearanceTab() {

@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useDocuments } from '../api/records';
 import { DocumentCard } from '../components/shared/DocumentCard';
 import { CardSkeleton, EmptyState, ErrorState } from '../components/shared/Skeleton';
-import { ModeToggle } from '../components/shared/ModeToggle';
-import { useMode } from '../context/ModeContext';
-import type { MedDocument, DocumentType } from '../types/api';
+import { 
+  ArrowLeft, ChevronRight, 
+  HeartPulse, Activity, Wind, Brain, Apple, Bug, Bone, Droplets, Stethoscope, FileBox 
+} from 'lucide-react';
+import type { MedDocument } from '../types/api';
 
 const TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: 'All types' },
@@ -21,7 +23,38 @@ export default function Records() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [selectedDoc, setSelectedDoc] = useState<MedDocument | null>(null);
-  const { isDoctor } = useMode();
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+
+  // Derived Folders
+  const getCategoryForCondition = (cond: string) => {
+    const normalized = cond.toLowerCase().replace(/_/g, ' ');
+    if (normalized.includes('stemi') || normalized.includes('hypertension') || normalized.includes('heart') || normalized.includes('cardiac') || normalized.includes('cholesterol') || normalized.includes('lipid')) return 'Cardiology';
+    if (normalized.includes('diabetes') || normalized.includes('thyroid') || normalized.includes('hypothyroidism')) return 'Endocrinology';
+    if (normalized.includes('asthma') || normalized.includes('copd') || normalized.includes('lung') || normalized.includes('respiratory')) return 'Pulmonology';
+    if (normalized.includes('depression') || normalized.includes('psychiatry') || normalized.includes('mdd')) return 'Psychiatry';
+    if (normalized.includes('fatty liver') || normalized.includes('stomach') || normalized.includes('gastric') || normalized.includes('liver')) return 'Gastroenterology';
+    if (normalized.includes('infection') || normalized.includes('fever') || normalized.includes('sepsis') || normalized.includes('covid')) return 'Infectious Diseases';
+    if (normalized.includes('fracture') || normalized.includes('bone') || normalized.includes('ortho')) return 'Orthopedics';
+    if (normalized.includes('kidney') || normalized.includes('renal')) return 'Nephrology';
+    if (normalized.includes('brain') || normalized.includes('neuro') || normalized.includes('stroke') || normalized.includes('seizure')) return 'Neurology';
+    return normalized.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  };
+
+  const getIconForCategory = (category: string) => {
+    switch (category) {
+      case 'Cardiology': return HeartPulse;
+      case 'Endocrinology': return Activity;
+      case 'Pulmonology': return Wind;
+      case 'Psychiatry':
+      case 'Neurology': return Brain;
+      case 'Gastroenterology': return Apple;
+      case 'Infectious Diseases': return Bug;
+      case 'Orthopedics': return Bone;
+      case 'Nephrology': return Droplets;
+      case 'General Records': return FileBox;
+      default: return Stethoscope;
+    }
+  };
 
   // 300ms debounce
   useEffect(() => {
@@ -34,6 +67,26 @@ export default function Records() {
     type: typeFilter || undefined,
   });
 
+  const folders = useMemo(() => {
+    if (!data?.docs) return [];
+    const map = new Map<string, MedDocument[]>();
+    
+    data.docs.forEach(doc => {
+      let category = 'General Records';
+      if (doc.conditionsMentioned && doc.conditionsMentioned.length > 0) {
+        category = getCategoryForCondition(doc.conditionsMentioned[0]);
+      }
+      if (!map.has(category)) map.set(category, []);
+      map.get(category)!.push(doc);
+    });
+    
+    return Array.from(map.entries()).map(([name, docs]) => ({ name, docs })).sort((a, b) => {
+      if (a.name === 'General Records') return 1;
+      if (b.name === 'General Records') return -1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [data?.docs]);
+
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
@@ -44,7 +97,6 @@ export default function Records() {
             {data ? `${data.total} document${data.total !== 1 ? 's' : ''}` : 'Loading...'}
           </p>
         </div>
-        <ModeToggle />
       </div>
 
       {/* Search & filters */}
@@ -69,6 +121,24 @@ export default function Records() {
         </select>
       </div>
 
+      {selectedFolder && (
+        <div className="flex items-center gap-3 my-2">
+          <button 
+            onClick={() => setSelectedFolder(null)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-border-dim hover:border-teal/50 hover:bg-border-dim text-text-primary font-semibold text-sm transition-all shadow-sm"
+          >
+            <ArrowLeft size={16} /> Back to Folders
+          </button>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card border border-border-dim shadow-sm text-text-primary text-sm font-bold">
+            {(() => {
+              const Icon = getIconForCategory(selectedFolder);
+              return <Icon size={16} className="text-teal" />;
+            })()}
+            {selectedFolder}
+          </div>
+        </div>
+      )}
+
       {/* Results grid */}
       {error && <ErrorState message={error} />}
       {loading && (
@@ -82,23 +152,57 @@ export default function Records() {
           icon="📭"
         />
       )}
-      {!loading && data && data.docs.length > 0 && (
+      
+      {!loading && data && data.docs.length > 0 && !selectedFolder && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {data.docs.map((doc) => (
+          {folders.map((folder) => {
+            const Icon = getIconForCategory(folder.name);
+            return (
+              <div 
+                key={folder.name} 
+                onClick={() => setSelectedFolder(folder.name)}
+                className="cursor-pointer transition-all flex items-center p-5 gap-4"
+                style={{ 
+                  background: 'var(--dd-card)', 
+                  border: '1px solid var(--dd-border)', 
+                  borderRadius: '16px',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.03)'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(20, 184, 166, 0.4)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--dd-border)'; e.currentTarget.style.transform = 'none'; }}
+              >
+                <div className="w-14 h-14 rounded-2xl bg-teal/10 flex items-center justify-center flex-shrink-0 shadow-inner">
+                  <Icon size={26} className="text-teal" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-lg text-text-primary truncate tracking-tight">{folder.name}</h3>
+                  <p className="text-sm text-text-muted mt-1 font-medium">{folder.docs.length} document{folder.docs.length !== 1 ? 's' : ''}</p>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-surface flex items-center justify-center flex-shrink-0">
+                  <ChevronRight size={18} className="text-text-faint" />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {!loading && data && selectedFolder && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {(folders.find(f => f.name === selectedFolder)?.docs || []).map((doc) => (
             <DocumentCard key={doc._id} doc={doc} onClick={() => setSelectedDoc(doc)} />
           ))}
         </div>
       )}
 
-      {/* SlideOver */}
       {selectedDoc && (
-        <DocSlideOver doc={selectedDoc} isDoctor={isDoctor} onClose={() => setSelectedDoc(null)} />
+        <DocSlideOver doc={selectedDoc} onClose={() => setSelectedDoc(null)} />
       )}
     </div>
   );
 }
 
-function DocSlideOver({ doc, isDoctor, onClose }: { doc: MedDocument; isDoctor: boolean; onClose: () => void }) {
+function DocSlideOver({ doc, onClose }: { doc: MedDocument; onClose: () => void }) {
   // Close on Escape key
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -109,7 +213,14 @@ function DocSlideOver({ doc, isDoctor, onClose }: { doc: MedDocument; isDoctor: 
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="w-full max-w-lg bg-surface border-l border-border-mid overflow-y-auto animate-slide-in-right p-6 flex flex-col gap-5">
+      <div
+        className="w-full max-w-lg overflow-y-auto animate-slide-in-right p-6 flex flex-col gap-5"
+        style={{
+          background: 'var(--dd-card, #1e1e2e)',
+          borderLeft: '1px solid var(--dd-border)',
+          boxShadow: '-4px 0 32px rgba(0,0,0,0.35)',
+        }}
+      >
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0 mr-4">
             <span className="badge-muted text-xs mb-2 inline-block capitalize">
@@ -137,12 +248,12 @@ function DocSlideOver({ doc, isDoctor, onClose }: { doc: MedDocument; isDoctor: 
           <p className="font-body text-sm text-text-muted">👨‍⚕️ {doc.doctorName}</p>
         )}
 
-        <div className="mv-card">
-          <p className="font-sans text-xs font-semibold text-text-faint uppercase tracking-wider mb-2">
-            {isDoctor ? 'Clinical Summary' : 'What This Means For You'}
+        <div className="mv-card" style={{ background: 'var(--dd-surface)', border: '1px solid var(--dd-border)', borderRadius: 12, padding: 16 }}>
+          <p className="font-sans text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--dd-text-muted)' }}>
+            Clinical Summary
           </p>
-          <p className="font-body text-sm text-text-muted leading-relaxed">
-            {isDoctor ? doc.summaryClinical : doc.summaryPlain}
+          <p className="font-body text-sm leading-relaxed" style={{ color: 'var(--dd-text)' }}>
+            {doc.summaryClinical || doc.summaryPlain || 'No summary available.'}
           </p>
         </div>
 

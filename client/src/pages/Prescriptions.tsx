@@ -123,7 +123,7 @@ export default function Prescriptions() {
             <span className="flex items-center gap-1"><span className="w-3 h-px bg-coral inline-block" /> Severe</span>
           </div>
         </div>
-        <div className="h-64 bg-card rounded-lg overflow-hidden">
+        <div className="h-96 bg-card rounded-lg overflow-hidden">
           {gLoading && <div className="skeleton h-full" />}
           {!gLoading && graph && graph.nodes.length > 0 && (
             <InteractionGraph

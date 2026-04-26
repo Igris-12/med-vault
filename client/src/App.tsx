@@ -38,12 +38,28 @@ function PageFallback() {
 }
 
 function AppLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, userProfile, loading } = useAuth();
   const location = useLocation();
   const isFullBleed = location.pathname.includes('/locator') || location.pathname.includes('/graph');
 
   if (!loading && !user) {
     return <Navigate to="/" replace />;
+  }
+
+  if (!loading && userProfile) {
+    const isDoctor = userProfile.modePreference === 'doctor';
+    const isDoctorRoute = location.pathname.startsWith('/app/doctor');
+    
+    // Allow symptom-graph to be accessed by both, or enforce strictly if needed.
+    // Assuming symptom-graph is for doctors or patients based on usage. 
+    // Wait, patientGraphVisualization is used by doctors, but patients also have a symptom graph?
+    // Let's just strictly enforce /app/doctor for doctors, and NOT /app/doctor for patients.
+    if (isDoctor && !isDoctorRoute) {
+      return <Navigate to="/app/doctor/dashboard" replace />;
+    }
+    if (!isDoctor && isDoctorRoute) {
+      return <Navigate to="/app/dashboard" replace />;
+    }
   }
 
   return (

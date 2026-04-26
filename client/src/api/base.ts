@@ -24,8 +24,7 @@ onAuthStateChanged(auth, () => { _authReadyResolve?.(); });
 
 // ─── Auth token helper ────────────────────────────────────────────────────────
 export async function getAuthToken(): Promise<string> {
-  // Mock mode: bypass Firebase entirely
-  if (import.meta.env.VITE_USE_MOCK === 'true') return 'dev-bypass-token';
+
 
   // Wait until Firebase has restored the persisted session (max ~2s on cold load)
   await _authReady;

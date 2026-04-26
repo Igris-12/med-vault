@@ -6,7 +6,6 @@ import { uploadFiles } from '../api/records';
 import { useSocket } from '../context/SocketContext';
 import type { ProcessingStep, MedDocument } from '../types/api';
 import { toast } from 'react-hot-toast';
-import { USE_MOCK_DATA } from '../mock';
 
 interface UploadingFile {
   docId: string;
@@ -15,7 +14,7 @@ interface UploadingFile {
   result?: Partial<MedDocument>;
 }
 
-const MOCK_STEPS: ProcessingStep[] = ['saving', 'analyzing', 'embedding', 'storing', 'done'];
+
 
 export default function Upload() {
   const [uploading, setUploading] = useState<UploadingFile[]>([]);
@@ -35,15 +34,7 @@ export default function Upload() {
       }));
       setUploading(initial);
 
-      if (USE_MOCK_DATA) {
-        // Simulate step progression for mock mode
-        for (const step of MOCK_STEPS) {
-          await new Promise((r) => setTimeout(r, 700));
-          setUploading((prev) => prev.map((f) => ({ ...f, step })));
-        }
-        setIsDone(true);
-        toast.success(`${files.length} file(s) processed successfully!`);
-      }
+
     } catch {
       toast.error('Upload failed. Please try again.');
     }

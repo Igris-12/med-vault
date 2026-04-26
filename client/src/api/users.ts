@@ -37,6 +37,11 @@ export async function getProfile(): Promise<UserProfile> {
   return apiFetch<UserProfile>('/api/users/profile');
 }
 
+/** Sync Firebase user to DB */
+export async function syncProfile(): Promise<UserProfile> {
+  return apiFetch<UserProfile>('/api/users/sync', { method: 'POST' });
+}
+
 /** Update the current user's profile fields */
 export async function updateProfile(data: Partial<UserProfile>): Promise<UserProfile> {
   return apiFetch<UserProfile>('/api/users/profile', {

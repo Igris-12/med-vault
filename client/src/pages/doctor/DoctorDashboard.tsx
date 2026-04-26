@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Users, FileText, AlertTriangle, Activity, Brain, Sparkles,
-  TrendingUp, Clock, ChevronRight, Loader2, X, Send, User, Pill, TestTube,
-  Calendar, Building2, Zap, Shield, Eye } from 'lucide-react';
+import { Search, Users, FileText, AlertTriangle, Activity, Brain,
+  TrendingUp, Clock, ChevronRight, Loader2, User, Zap, Shield } from 'lucide-react';
 import { authFetch } from '../../api/base';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -142,7 +141,7 @@ export default function DoctorDashboard() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -163,7 +162,7 @@ export default function DoctorDashboard() {
 
   const handleSearch = useCallback((q: string) => {
     setSearch(q);
-    clearTimeout(debounceRef.current);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!q.trim()) {
       authFetch('/api/doctor/patients').then(r => r.json()).then(d => { if (d.success) setPatients(d.data); });
       return;

@@ -42,6 +42,7 @@ createRoot(document.getElementById('root')!).render(
         <ThemeProvider>
           <ModeProvider>
             <AuthedSocketProvider>
+            <SocketProvider>
               <Root />
               <Toaster
                 position="bottom-right"
@@ -58,6 +59,7 @@ createRoot(document.getElementById('root')!).render(
                   error: { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
                 }}
               />
+              </SocketProvider>
             </AuthedSocketProvider>
           </ModeProvider>
         </ThemeProvider>

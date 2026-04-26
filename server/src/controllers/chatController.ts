@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import DocumentModel from '../models/Document.js';
 import ChatSessionModel from '../models/ChatSession.js';
 import { streamContextualChat } from '../services/geminiService.js';
@@ -103,12 +104,35 @@ export const uploadChatMedia = async (req: Request, res: Response): Promise<void
       'medvault/chat',
       `chat_${req.user!.uid}`
     );
+    // Extract text from audio using Gemini
+    let transcription = '';
+    if (file.mimetype.startsWith('audio/')) {
+      try {
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const audioPart = {
+          inlineData: {
+            data: buffer.toString('base64'),
+            mimeType: file.mimetype,
+          },
+        };
+        const result = await model.generateContent([
+          audioPart,
+          { text: "Transcribe the following audio accurately. Just output the transcription." }
+        ]);
+        transcription = result.response.text();
+      } catch (aiErr) {
+        console.error('Gemini Transcription failed:', aiErr);
+      }
+    }
+
     // Remove local temp file
     fs.unlink(file.path, () => {});
 
     res.json({
       success: true,
       data: {
+        transcription,
         url: cloudResult.url,
         publicId: cloudResult.publicId,
         filename: file.originalname,

@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Brain, Search, Send, Loader2, AlertTriangle, Pill,
-  TestTube, Calendar, Building2, FileText, TrendingUp, Sparkles, X, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Brain, Send, Loader2, AlertTriangle, Pill,
+  TestTube, Calendar, Building2, TrendingUp, Sparkles, X, ChevronDown } from 'lucide-react';
 import { authFetch } from '../../api/base';
 
 const TYPE_ICON: Record<string, string> = { blood_test:'🩸', prescription:'💊', imaging:'📷', ecg:'❤️', discharge_summary:'🏥', consultation:'👨‍⚕️', other:'📋' };
@@ -16,6 +16,7 @@ interface PatientData {
   rxs: Rx[];
   abnormalLabs: LabValue[];
   conditions: Array<{ name: string; count: number }>;
+  allLabValues?: LabValue[];
 }
 
 // ── mini components ──────────────────────────────────────────────────────────

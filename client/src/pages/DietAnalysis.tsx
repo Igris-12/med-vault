@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Camera, Apple, BrainCircuit, PieChart, Activity, Target, AlertTriangle, ArrowRight, Loader2, X, Upload } from 'lucide-react';
+import { Camera, Apple, BrainCircuit, PieChart, Activity, Target, AlertTriangle, Loader2, X, Upload } from 'lucide-react';
 import { getAuthToken } from '../api/base';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -260,7 +260,7 @@ export default function DietAnalysis() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 {result.nutrients
                   ? NUTRIENTS_CONFIG.map(({ key, label, unit, max, color }) => {
-                      const val = (result.nutrients as Record<string, number>)[key] ?? 0;
+                      const val = (result.nutrients as unknown as Record<string, number>)[key] ?? 0;
                       const pct = Math.min(100, Math.round((val / max) * 100));
                       return (
                         <div key={key} style={{ background: 'rgba(100,116,139,0.05)', padding: 14, borderRadius: 10 }}>

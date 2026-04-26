@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { DocumentStatusEvent } from '../types/api';
-import { USE_MOCK_DATA } from '../mock';
+import { useAuth } from './AuthContext';
 
 interface Notification {
   id: string;
@@ -26,7 +26,9 @@ const SocketContext = createContext<SocketContextType>({
   markAllRead: () => {},
 });
 
-export function SocketProvider({ children, userId }: { children: React.ReactNode; userId?: string }) {
+export function SocketProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const userId = user?.uid;
   const [processingDocs, setProcessingDocs] = useState<Record<string, DocumentStatusEvent>>({});
   const [connected, setConnected] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -36,7 +38,7 @@ export function SocketProvider({ children, userId }: { children: React.ReactNode
   const markAllRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
 
   useEffect(() => {
-    if (USE_MOCK_DATA || !userId) return;
+    if (!userId) return;
 
     const connect = async () => {
       const { io } = await import('socket.io-client');
@@ -54,7 +56,7 @@ export function SocketProvider({ children, userId }: { children: React.ReactNode
         if (event.status === 'done') {
           setNotifications(prev => [{
             id: `doc-${event.docId}-${Date.now()}`,
-            type: 'document',
+            type: 'document' as const,
             message: `Document processed successfully`,
             timestamp: new Date(),
             read: false,
@@ -65,7 +67,7 @@ export function SocketProvider({ children, userId }: { children: React.ReactNode
       socket.on('reminder:sent', (data: { id: string; message: string }) => {
         setNotifications(prev => [{
           id: `rem-${data.id}-${Date.now()}`,
-          type: 'reminder',
+          type: 'reminder' as const,
           message: `Reminder sent: ${data.message.slice(0, 60)}`,
           timestamp: new Date(),
           read: false,
@@ -75,7 +77,7 @@ export function SocketProvider({ children, userId }: { children: React.ReactNode
       socket.on('reminder:failed', (data: { id: string }) => {
         setNotifications(prev => [{
           id: `rem-fail-${data.id}-${Date.now()}`,
-          type: 'reminder',
+          type: 'reminder' as const,
           message: `Reminder delivery failed`,
           timestamp: new Date(),
           read: false,

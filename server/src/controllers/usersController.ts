@@ -124,3 +124,79 @@ export const regenerateEmergencyToken = async (req: Request, res: Response): Pro
   if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return; }
   res.json({ success: true, data: { emergencyToken: newToken } });
 };
+
+// ─── Send an immediate test WhatsApp reminder ─────────────────────────────────
+export const sendTestReminder = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await UserModel.findById(req.user!.uid).select('name whatsappPhone').lean();
+    if (!user?.whatsappPhone) {
+      res.status(400).json({ success: false, error: 'No WhatsApp number linked. Go to Settings → WhatsApp.' });
+      return;
+    }
+
+    const firstName = user.name?.split(' ')[0] || 'there';
+    const msg = req.body?.message ||
+      `🧪 *MedVault Test Reminder*\n\nHi ${firstName}! This is a test message from MedVault to confirm your WhatsApp reminders are working.\n\n✅ If you see this, your reminder setup is working perfectly!\n\nSend *menu* to explore MedVault features.\n\n_— MedVault Health Assistant_`;
+
+    await sendWhatsAppMessage(user.whatsappPhone, msg);
+    res.json({ success: true, data: { sent: true, to: user.whatsappPhone } });
+  } catch (err: any) {
+    console.error('[Test Reminder] Error:', err);
+    const isSandbox = err?.message?.includes('21608') || err?.code === 21608;
+    res.status(isSandbox ? 400 : 500).json({
+      success: false,
+      error: isSandbox
+        ? 'Your number is not joined to the Twilio Sandbox. Send "join <sandbox-word>" to +1 415 523 8886 on WhatsApp first.'
+        : err.message || 'Failed to send WhatsApp message',
+    });
+  }
+};
+
+// ─── Manually schedule a reminder (creates a Reminder document) ───────────────
+export const scheduleReminder = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { message, scheduledAt, frequency = 'once', tag = 'manual', phone: bodyPhone } = req.body as {
+      message: string; scheduledAt: string; frequency?: string; tag?: string; phone?: string;
+    };
+    if (!message || !scheduledAt) {
+      res.status(400).json({ success: false, error: 'message and scheduledAt are required' });
+      return;
+    }
+
+    // Validate scheduledAt is in the future
+    const schedDate = new Date(scheduledAt);
+    if (isNaN(schedDate.getTime())) {
+      res.status(400).json({ success: false, error: 'Invalid scheduledAt date' });
+      return;
+    }
+    if (schedDate <= new Date()) {
+      res.status(400).json({ success: false, error: 'Scheduled time must be in the future' });
+      return;
+    }
+
+    const user = await UserModel.findById(req.user!.uid).select('name whatsappPhone').lean();
+    const phone = bodyPhone || user?.whatsappPhone;
+    if (!phone) {
+      res.status(400).json({ success: false, error: 'No WhatsApp number. Link one in Settings → Profile first.' });
+      return;
+    }
+
+    const { default: ReminderModel } = await import('../models/Reminder.js');
+    const reminder = await ReminderModel.create({
+      userId:      req.user!.uid,
+      phone:       phone.startsWith('+') ? phone : `+${phone}`,
+      message,
+      scheduledAt: schedDate,
+      frequency,
+      tag,
+      status:      'pending',
+    });
+
+    console.log(`[Reminder] Scheduled: ${reminder._id} → ${phone} at ${schedDate.toISOString()} [${frequency}]`);
+    res.json({ success: true, data: reminder });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+

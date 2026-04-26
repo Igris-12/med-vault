@@ -1,34 +1,49 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase';
+import { getProfile, syncProfile, updateProfile, type UserProfile } from '../api/users';
 
 interface AuthContextValue {
   user: User | null;
+  userProfile: UserProfile | null;
   loading: boolean;
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: (role?: 'patient' | 'doctor') => Promise<void>;
   logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user,    setUser]    = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // onAuthStateChanged fires on login, logout, and token refresh.
-    // We no longer cache the token in localStorage — getAuthToken() in base.ts
-    // calls auth.currentUser.getIdToken() directly, which auto-refreshes.
-    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+      if (firebaseUser) {
+        try {
+          await syncProfile();
+          const profile = await getProfile();
+          setUserProfile(profile);
+        } catch (e) {
+          console.error("Failed to fetch user profile", e);
+        }
+      } else {
+        setUserProfile(null);
+      }
       setLoading(false);
     });
     return unsub;
   }, []);
 
-  async function signInWithGoogle() {
+  async function signInWithGoogle(role?: 'patient' | 'doctor') {
     await signInWithPopup(auth, googleProvider);
-    // Token is now managed by the Firebase SDK — no localStorage needed
+    if (role) {
+      await syncProfile();
+      const updated = await updateProfile({ modePreference: role });
+      setUserProfile(updated);
+    }
   }
 
   async function logout() {
@@ -36,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, signInWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );

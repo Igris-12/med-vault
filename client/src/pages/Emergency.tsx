@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MOCK_USER } from '../mock';
+
 import { WhatsAppConnect } from '../components/WhatsAppConnect';
 import type { BloodType } from '../types/api';
 
@@ -93,7 +93,7 @@ function QRPreview({
   name: string;
   bloodType: BloodType;
   allergies: string[];
-  contacts: typeof MOCK_USER.emergencyContacts;
+  contacts: { name: string; phone: string; relationship: string }[];
 }) {
   const btColor = BLOOD_TYPE_COLORS[bloodType];
 
@@ -132,7 +132,7 @@ function QRPreview({
         )}
 
         {/* Contact */}
-        {contacts.slice(0, 1).map((c, i) => (
+        {contacts.slice(0, 1).map((c: { name: string; phone: string; relationship: string }, i: number) => (
           <div key={i} className="border-t border-gray-100 pt-3">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Emergency Contact</p>
             <p className="text-sm font-bold text-gray-800">{c.name}</p>
@@ -163,12 +163,12 @@ function QRPreview({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Emergency() {
-  const [bloodType, setBloodType] = useState<BloodType>(MOCK_USER.bloodType);
-  const [allergies, setAllergies] = useState<string[]>(MOCK_USER.allergies);
-  const [contacts, setContacts] = useState(MOCK_USER.emergencyContacts);
+  const [bloodType, setBloodType] = useState<BloodType>('O+');
+  const [allergies, setAllergies] = useState<string[]>(['Penicillin', 'Peanuts']);
+  const [contacts, setContacts] = useState([{ name: 'Jane Doe', phone: '+1 555-0102', relationship: 'Spouse' }]);
   const [saved, setSaved] = useState(false);
 
-  const qrUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/emergency/public/${MOCK_USER.emergencyToken}`;
+  const qrUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/emergency/public/example-token`;
 
   const handleSave = () => {
     setSaved(true);
@@ -250,7 +250,7 @@ export default function Emergency() {
                     <p className="font-body text-xs text-text-faint">{c.relationship}</p>
                   </div>
                   <button
-                    onClick={() => setContacts(contacts.filter((_, j) => j !== i))}
+                    onClick={() => setContacts(contacts.filter((_, j: number) => j !== i))}
                     className="text-text-faint hover:text-coral transition-colors text-sm p-1"
                   >
                     ✕
@@ -308,7 +308,7 @@ export default function Emergency() {
               <span className="badge-teal text-xs">● Updates in real time</span>
             </div>
             <QRPreview
-              name={MOCK_USER.name}
+              name="Jane Doe"
               bloodType={bloodType}
               allergies={allergies}
               contacts={contacts}
