@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import {
   LayoutDashboard, Activity, FolderOpen, Pill, MessageSquare,
-  Upload, Smartphone, Settings, HeartPulse, Bell, MapPin, Network, CalendarDays, Apple, MessageCircle, Stethoscope
+  Upload, Smartphone, Settings, HeartPulse, Bell, MapPin, Network, CalendarDays, Apple, MessageCircle, Stethoscope, FolderHeart
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -23,7 +23,8 @@ const NAV_ITEMS = [
 ];
 
 const DOCTOR_ITEMS = [
-  { to: '/app/doctor/dashboard', icon: Stethoscope, label: 'Doctor Portal' },
+  { to: '/app/doctor/dashboard', icon: Stethoscope,  label: 'Doctor Portal' },
+  { to: '/app/doctor/records',   icon: FolderHeart,  label: 'Patient Records' },
 ];
 
 import { useAuth } from '../../context/AuthContext';
