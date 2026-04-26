@@ -11,7 +11,6 @@ import { auth } from '../config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-const IS_DEV   = import.meta.env.DEV;
 
 // ─── Auth-ready promise ───────────────────────────────────────────────────────
 // Firebase auth state is async. On page load, auth.currentUser is null for

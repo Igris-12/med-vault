@@ -28,6 +28,7 @@ const CalendarPage = lazy(() => import('./pages/Calendar'));
 const DietAnalysis = lazy(() => import('./pages/DietAnalysis'));
 const DoctorDashboard = lazy(() => import('./pages/doctor/DoctorDashboard'));
 const PatientDetail  = lazy(() => import('./pages/doctor/PatientDetail'));
+const DoctorRecords  = lazy(() => import('./pages/doctor/DoctorRecords'));
 
 function PageFallback() {
   return (
@@ -117,6 +118,8 @@ export default function App() {
                 <Route path="doctor/dashboard"           element={<DoctorDashboard />} />
                 <Route path="doctor/patients"            element={<DoctorDashboard />} />
                 <Route path="doctor/patients/:id"        element={<PatientDetail />} />
+                <Route path="doctor/records"             element={<DoctorRecords />} />
+                <Route path="doctor/records/:patientId"  element={<DoctorRecords />} />
                 <Route path="reminders"           element={<Navigate to="reminders/dashboard" replace />} />
                 <Route path="*"                   element={<Navigate to="dashboard" replace />} />
               </Routes>

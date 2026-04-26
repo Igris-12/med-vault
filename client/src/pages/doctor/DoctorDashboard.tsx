@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Users, FileText, AlertTriangle, Activity, Brain,
-  TrendingUp, Clock, ChevronRight, Loader2, User, Zap, Shield } from 'lucide-react';
+  TrendingUp, Clock, ChevronRight, Loader2, User, Zap, Shield, LayoutList, LayoutGrid } from 'lucide-react';
 import { authFetch } from '../../api/base';
+import { PatientMatrix } from '../../components/doctor/PatientMatrix';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 interface PatientSummary {
@@ -138,6 +139,7 @@ export default function DoctorDashboard() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DoctorStats | null>(null);
   const [patients, setPatients] = useState<PatientSummary[]>([]);
+  const [viewMode, setViewMode] = useState<'list' | 'matrix'>('list');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
@@ -198,7 +200,24 @@ export default function DoctorDashboard() {
             Real-time patient records, AI summaries, and natural language search
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {/* View mode toggle */}
+          <div style={{ display: 'flex', background: 'var(--dd-card)', border: '1px solid var(--dd-border)', borderRadius: 10, padding: 3, gap: 2 }}>
+            <button
+              onClick={() => setViewMode('list')}
+              title="Patient List"
+              style={{ padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, background: viewMode === 'list' ? 'var(--dd-accent)' : 'transparent', color: viewMode === 'list' ? '#fff' : 'var(--dd-text-muted)', transition: 'all 0.2s' }}
+            >
+              <LayoutList size={13} /> List
+            </button>
+            <button
+              onClick={() => setViewMode('matrix')}
+              title="Comparison Matrix"
+              style={{ padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, background: viewMode === 'matrix' ? 'var(--dd-accent)' : 'transparent', color: viewMode === 'matrix' ? '#fff' : 'var(--dd-text-muted)', transition: 'all 0.2s' }}
+            >
+              <LayoutGrid size={13} /> Matrix
+            </button>
+          </div>
           <button onClick={() => navigate('/app/doctor/patients')} style={{ padding: '8px 16px', borderRadius: 10, background: 'var(--dd-accent)', border: 'none', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: 6 }}>
             <Users size={14} /> All Patients
           </button>
@@ -226,66 +245,70 @@ export default function DoctorDashboard() {
         </div>
       )}
 
-      {/* Main grid: patients + activity */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
+      {/* Main content — list or matrix */}
+      {viewMode === 'list' ? (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
 
-        {/* Patient list column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Search */}
-          <div style={{ position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dd-text-dim)' }} />
-            <input
-              value={search}
-              onChange={e => handleSearch(e.target.value)}
-              placeholder="Search patients by name or email..."
-              style={{ width: '100%', padding: '10px 12px 10px 36px', borderRadius: 10, border: '1px solid var(--dd-border)', background: 'var(--dd-card)', color: 'var(--dd-text)', fontFamily: 'Inter, sans-serif', fontSize: 13, boxSizing: 'border-box', outline: 'none' }}
-            />
-            {searching && <Loader2 size={13} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dd-accent)', animation: 'spin 1s linear infinite' }} />}
-          </div>
-
-          <div style={{ fontSize: 11, color: 'var(--dd-text-dim)', fontFamily: 'monospace' }}>{patients.length} patient{patients.length !== 1 ? 's' : ''} {search ? 'matching' : 'total'}</div>
-
-          {patients.map(p => (
-            <PatientCard key={p._id} patient={p} onClick={() => navigate(`/app/doctor/patients/${p._id}`)} />
-          ))}
-          {patients.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--dd-text-dim)' }}>
-              <User size={32} style={{ marginBottom: 8, opacity: 0.3 }} />
-              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13 }}>No patients found</p>
+          {/* Patient list column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Search */}
+            <div style={{ position: 'relative' }}>
+              <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dd-text-dim)' }} />
+              <input
+                value={search}
+                onChange={e => handleSearch(e.target.value)}
+                placeholder="Search patients by name or email..."
+                style={{ width: '100%', padding: '10px 12px 10px 36px', borderRadius: 10, border: '1px solid var(--dd-border)', background: 'var(--dd-card)', color: 'var(--dd-text)', fontFamily: 'Inter, sans-serif', fontSize: 13, boxSizing: 'border-box', outline: 'none' }}
+              />
+              {searching && <Loader2 size={13} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dd-accent)', animation: 'spin 1s linear infinite' }} />}
             </div>
-          )}
-        </div>
 
-        {/* Right sidebar */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <RecentActivity items={stats?.recentUploads ?? []} />
+            <div style={{ fontSize: 11, color: 'var(--dd-text-dim)', fontFamily: 'monospace' }}>{patients.length} patient{patients.length !== 1 ? 's' : ''} {search ? 'matching' : 'total'}</div>
 
-          {/* Quick actions */}
-          <div style={{ background: 'var(--dd-card)', border: '1px solid var(--dd-border)', borderRadius: 16, padding: '20px 22px' }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--dd-text)', fontFamily: 'Inter, sans-serif', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Zap size={14} color="var(--dd-accent)" /> Quick Actions
-            </div>
-            {[
-              { icon: Brain, label: 'AI Patient Search', desc: 'Natural language', action: () => navigate('/app/doctor/patients') },
-              { icon: TrendingUp, label: 'Lab Trend Analysis', desc: 'See lab value history', action: () => navigate('/app/doctor/patients') },
-              { icon: Activity, label: 'Symptom Graph', desc: 'Clinical knowledge graph', action: () => navigate('/app/symptom-graph') },
-            ].map(({ icon: Icon, label, desc, action }) => (
-              <div key={label} onClick={action} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', cursor: 'pointer', borderBottom: '1px solid var(--dd-border)' }}
-                onMouseEnter={e => { e.currentTarget.style.opacity = '0.7'; }}
-                onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--dd-accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon size={14} color="var(--dd-accent)" />
-                </div>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--dd-text)', fontFamily: 'Inter, sans-serif' }}>{label}</div>
-                  <div style={{ fontSize: 10, color: 'var(--dd-text-muted)' }}>{desc}</div>
-                </div>
-                <ChevronRight size={12} color="var(--dd-text-dim)" style={{ marginLeft: 'auto' }} />
-              </div>
+            {patients.map(p => (
+              <PatientCard key={p._id} patient={p} onClick={() => navigate(`/app/doctor/patients/${p._id}`)} />
             ))}
+            {patients.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--dd-text-dim)' }}>
+                <User size={32} style={{ marginBottom: 8, opacity: 0.3 }} />
+                <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 13 }}>No patients found</p>
+              </div>
+            )}
+          </div>
+
+          {/* Right sidebar */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <RecentActivity items={stats?.recentUploads ?? []} />
+
+            {/* Quick actions */}
+            <div style={{ background: 'var(--dd-card)', border: '1px solid var(--dd-border)', borderRadius: 16, padding: '20px 22px' }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--dd-text)', fontFamily: 'Inter, sans-serif', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Zap size={14} color="var(--dd-accent)" /> Quick Actions
+              </div>
+              {[
+                { icon: Brain, label: 'AI Patient Search', desc: 'Natural language', action: () => navigate('/app/doctor/patients') },
+                { icon: TrendingUp, label: 'Lab Trend Analysis', desc: 'See lab value history', action: () => navigate('/app/doctor/patients') },
+                { icon: Activity, label: 'Symptom Graph', desc: 'Clinical knowledge graph', action: () => navigate('/app/symptom-graph') },
+              ].map(({ icon: Icon, label, desc, action }) => (
+                <div key={label} onClick={action} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', cursor: 'pointer', borderBottom: '1px solid var(--dd-border)' }}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = '0.7'; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--dd-accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon size={14} color="var(--dd-accent)" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--dd-text)', fontFamily: 'Inter, sans-serif' }}>{label}</div>
+                    <div style={{ fontSize: 10, color: 'var(--dd-text-muted)' }}>{desc}</div>
+                  </div>
+                  <ChevronRight size={12} color="var(--dd-text-dim)" style={{ marginLeft: 'auto' }} />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <PatientMatrix patients={patients} onSelect={id => navigate(`/app/doctor/patients/${id}`)} />
+      )}
     </div>
   );
 }

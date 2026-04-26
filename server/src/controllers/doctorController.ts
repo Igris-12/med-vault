@@ -228,3 +228,107 @@ export const getDoctorStats = async (req: Request, res: Response): Promise<void>
     res.status(500).json({ success: false, error: e.message });
   }
 };
+
+// ─── GET /api/doctor/patients/:id/records ─────────────────────────────────────
+// Flat list of docs for DoctorRecords folder view
+export const getPatientRecords = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const docs = await DocumentModel.find({ userId: id, status: 'done' })
+      .sort({ uploadedAt: -1 })
+      .select('_id filename documentType uploadedAt criticalityScore summaryPlain')
+      .lean();
+    res.json({ success: true, data: docs });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+};
+
+// ─── GET /api/doctor/patients/:id/export ──────────────────────────────────────
+// Returns full patient data as JSON (doctor can download as file)
+export const exportPatientData = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const format = (req.query.format as string) || 'json'; // 'json' | 'csv'
+
+    const [patient, docs, rxs] = await Promise.all([
+      UserModel.findById(id).lean(),
+      DocumentModel.find({ userId: id, status: 'done' }).sort({ documentDate: -1 }).lean(),
+      PrescriptionModel.find({ userId: id }).lean(),
+    ]);
+
+    if (!patient) { res.status(404).json({ success: false, error: 'Patient not found' }); return; }
+
+    if (format === 'csv') {
+      // Build CSV for documents
+      const header = 'Date,Type,Filename,Criticality,Hospital,Doctor,Conditions,Summary\n';
+      const rows = docs.map(d =>
+        [
+          (d.documentDate || d.uploadedAt)?.toISOString().split('T')[0] || '',
+          d.documentType || '',
+          `"${(d.filename || '').replace(/"/g, '""')}"`,
+          d.criticalityScore ?? '',
+          `"${(d.sourceHospital || '').replace(/"/g, '""')}"`,
+          `"${(d.doctorName || '').replace(/"/g, '""')}"`,
+          `"${(d.conditionsMentioned || []).join('; ').replace(/"/g, '""')}"`,
+          `"${(d.summaryPlain || '').slice(0, 200).replace(/"/g, '""')}"`,
+        ].join(',')
+      ).join('\n');
+
+      const csv = header + rows;
+      const filename = `${patient.name.replace(/\s+/g, '_')}_records.csv`;
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(csv);
+      return;
+    }
+
+    // Default: JSON export
+    const allLabValues = docs.flatMap(d =>
+      (d.labValues || []).map(lv => ({ ...lv, documentDate: d.documentDate || d.uploadedAt, fileName: d.filename }))
+    );
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      exportedBy: 'MedVault Doctor Portal',
+      patient: {
+        id: patient._id,
+        name: patient.name,
+        email: patient.email,
+        bloodType: patient.bloodType,
+        dateOfBirth: patient.dateOfBirth,
+        allergies: patient.allergies,
+      },
+      documents: docs.map(d => ({
+        id: d._id,
+        date: d.documentDate || d.uploadedAt,
+        type: d.documentType,
+        filename: d.filename,
+        criticalityScore: d.criticalityScore,
+        hospital: d.sourceHospital,
+        doctor: d.doctorName,
+        conditions: d.conditionsMentioned,
+        summary: d.summaryPlain,
+        labValues: d.labValues,
+        keyFindings: d.keyFindings,
+      })),
+      prescriptions: rxs.map(r => ({
+        drug: r.drugName,
+        dosage: r.dosage,
+        frequency: r.frequency,
+        status: r.status,
+        prescribingDoctor: r.prescribingDoctor,
+      })),
+      labValues: allLabValues,
+      abnormalLabs: allLabValues.filter(l => l.is_abnormal),
+    };
+
+    const filename = `${patient.name.replace(/\s+/g, '_')}_MedVault_export.json`;
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(JSON.stringify(exportData, null, 2));
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+};
+

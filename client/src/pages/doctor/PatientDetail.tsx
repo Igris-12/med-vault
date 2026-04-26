@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Brain, Send, Loader2, AlertTriangle, Pill,
-  TestTube, Calendar, Building2, TrendingUp, Sparkles, X, ChevronDown } from 'lucide-react';
-import { authFetch } from '../../api/base';
+  TestTube, Calendar, Building2, TrendingUp, Sparkles, X, ChevronDown, Download } from 'lucide-react';
+import { authFetch, getAuthToken } from '../../api/base';
 
 const TYPE_ICON: Record<string, string> = { blood_test:'🩸', prescription:'💊', imaging:'📷', ecg:'❤️', discharge_summary:'🏥', consultation:'👨‍⚕️', other:'📋' };
 const SCORE_COLOR = (s: number) => s >= 8 ? '#ef4444' : s >= 5 ? '#f97316' : '#22c55e';
@@ -201,6 +201,29 @@ export default function PatientDetail() {
   const navigate = useNavigate();
   const [data, setData] = useState<PatientData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async (format: 'json' | 'csv') => {
+    if (!id) return;
+    setExporting(true);
+    try {
+      const token = await getAuthToken();
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${API_BASE}/api/doctor/patients/${id}/export?format=${format}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `patient_export.${format}`;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error(e); }
+    setExporting(false);
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -235,7 +258,7 @@ export default function PatientDetail() {
         <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'linear-gradient(135deg,var(--dd-accent),#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 18, fontFamily: 'Inter,sans-serif' }}>
           {patient.name[0]?.toUpperCase()}
         </div>
-        <div>
+        <div style={{ flex: 1 }}>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--dd-text)', fontFamily: 'Inter,sans-serif', margin: 0 }}>{patient.name}</h1>
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             {age && <Badge>{age} years</Badge>}
@@ -244,6 +267,24 @@ export default function PatientDetail() {
             <Badge color="#22c55e">{timeline.length} records</Badge>
             <Badge color="#7c3aed">{rxs.filter(r => r.status === 'active').length} active Rx</Badge>
           </div>
+        </div>
+        {/* Export buttons */}
+        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+          <button
+            onClick={() => handleExport('csv')}
+            disabled={exporting}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 9, border: '1px solid var(--dd-border)', background: 'var(--dd-card)', color: 'var(--dd-text-muted)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter,sans-serif' }}
+          >
+            <Download size={13} /> Export CSV
+          </button>
+          <button
+            onClick={() => handleExport('json')}
+            disabled={exporting}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 9, border: 'none', background: 'var(--dd-accent)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter,sans-serif' }}
+          >
+            {exporting ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Download size={13} />}
+            {exporting ? 'Exporting…' : 'Export JSON'}
+          </button>
         </div>
       </div>
 
