@@ -50,8 +50,10 @@ export function HealthPulseRiver({ data, onHover }: Props) {
           data={data}
           margin={{ top: 8, right: 8, left: -24, bottom: 0 }}
           onMouseMove={(state) => {
-            if (state.activePayload) {
-              const d = state.activePayload[0]?.payload as TimelineMonth;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const s = state as any;
+            if (s.activePayload) {
+              const d = s.activePayload[0]?.payload as TimelineMonth;
               setActiveMonth(d?.month || null);
               onHover?.(d || null);
             }

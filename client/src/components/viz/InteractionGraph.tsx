@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
-import type { InteractionGraph, GraphNode, GraphEdge } from '../../types/api';
+import type { InteractionGraph, GraphNode } from '../../types/api';
 
 const SEVERITY_COLORS: Record<string, string> = {
   none: '#4A5568',
@@ -51,7 +51,8 @@ export function InteractionGraph({ graph, hoveredNodeId, onNodeHover }: Props) {
 
     // Simulation nodes & links (clone to avoid D3 mutation)
     const nodes: (GraphNode & d3.SimulationNodeDatum)[] = graph.nodes.map((n) => ({ ...n }));
-    const links: (GraphEdge & d3.SimulationLinkDatum<typeof nodes[0]>)[] = graph.edges.map((e) => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const links: any[] = graph.edges.map((e) => ({
       ...e,
       source: nodes.find((n) => n.id === e.source)!,
       target: nodes.find((n) => n.id === e.target)!,
@@ -114,7 +115,8 @@ export function InteractionGraph({ graph, hoveredNodeId, onNodeHover }: Props) {
         d3.select(event.sourceEvent.target.parentNode).attr('cursor', 'grab');
       });
 
-    nodeGroup.call(drag);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    nodeGroup.call(drag as any);
 
     nodeGroup.append('circle')
       .attr('r', 36)
