@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useDocuments } from '../api/records';
 import { DocumentCard } from '../components/shared/DocumentCard';
 import { CardSkeleton, EmptyState, ErrorState } from '../components/shared/Skeleton';
 import { 
-  ArrowLeft, ChevronRight, 
-  HeartPulse, Activity, Wind, Brain, Apple, Bug, Bone, Droplets, Stethoscope, FileBox 
+  ArrowLeft, ChevronRight, ChevronDown,
+  HeartPulse, Activity, Wind, Brain, Apple, Bug, Bone, Droplets, Stethoscope, FileBox,
+  FileJson, FileSpreadsheet, Download
 } from 'lucide-react';
 import type { MedDocument } from '../types/api';
 
@@ -24,6 +25,46 @@ export default function Records() {
   const [typeFilter, setTypeFilter] = useState('');
   const [selectedDoc, setSelectedDoc] = useState<MedDocument | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleExport = async (format: 'csv' | 'json') => {
+    setShowExportMenu(false);
+    setExporting(true);
+    try {
+      const { getAuthToken } = await import('../api/base');
+      const token = await getAuthToken();
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/export?format=${format}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `MedVault_Export_${new Date().toISOString().split('T')[0]}.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Export error:', e);
+      alert('Export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Derived Folders
   const getCategoryForCondition = (cond: string) => {
@@ -96,6 +137,63 @@ export default function Records() {
           <p className="font-body text-sm text-text-muted mt-1">
             {data ? `${data.total} document${data.total !== 1 ? 's' : ''}` : 'Loading...'}
           </p>
+        </div>
+        {/* Export split-button */}
+        <div ref={exportMenuRef} className="relative">
+          <button
+            onClick={() => !exporting && data?.total && setShowExportMenu((v) => !v)}
+            disabled={exporting || !data?.total}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all
+              disabled:opacity-40 disabled:cursor-not-allowed
+              border-2"
+            style={{
+              background: 'linear-gradient(135deg, var(--dd-accent), #7c3aed)',
+              color: '#fff',
+              borderColor: 'transparent',
+              boxShadow: '0 4px 14px var(--dd-accent-dim)',
+            }}
+            title="Export records"
+          >
+            {exporting ? (
+              <><span className="animate-spin inline-block">⏳</span> Exporting…</>
+            ) : (
+              <>
+                <Download size={15} />
+                Export
+                <ChevronDown size={14} className={`transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
+              </>
+            )}
+          </button>
+
+          {/* Dropdown */}
+          {showExportMenu && (
+            <div
+              className="absolute right-0 mt-2 w-44 rounded-xl overflow-hidden z-50"
+              style={{
+                background: 'var(--dd-card)',
+                border: '2px solid var(--dd-border)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+              }}
+            >
+              <button
+                onClick={() => handleExport('csv')}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors
+                  hover:bg-[var(--dd-surface)] text-[var(--dd-text)]"
+              >
+                <FileSpreadsheet size={16} className="text-emerald-500" />
+                <span>Download CSV</span>
+              </button>
+              <div style={{ height: 1, background: 'var(--dd-border)' }} />
+              <button
+                onClick={() => handleExport('json')}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors
+                  hover:bg-[var(--dd-surface)] text-[var(--dd-text)]"
+              >
+                <FileJson size={16} className="text-[var(--dd-accent)]" />
+                <span>Download JSON</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

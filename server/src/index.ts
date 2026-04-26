@@ -26,6 +26,7 @@ import aiGraphRoutes from './routes/aiGraph.js';
 import doctorRoutes from './routes/doctor.js';
 import remindersRoutes from './routes/reminders.js';
 import calendarRoutes from './routes/calendar.js';
+import exportRoutes from './routes/export.js';
 
 dotenv.config();
 
@@ -105,6 +106,7 @@ app.use('/api/ai/graph', aiGraphRoutes);
 app.use('/api/doctor', doctorRoutes);
 app.use('/api/reminders', remindersRoutes);
 app.use('/api/calendar', calendarRoutes);
+app.use('/api/export', exportRoutes);
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
 app.use((_req, res) => {

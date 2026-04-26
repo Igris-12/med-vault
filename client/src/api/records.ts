@@ -69,7 +69,6 @@ export async function uploadFiles(files: File[]): Promise<Array<{ docId: string;
   const token = await getAuthToken();
   const formData = new FormData();
   files.forEach((f) => formData.append('files', f));
-  const token = await getAuthToken();
   const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/upload`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
